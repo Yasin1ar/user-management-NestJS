@@ -14,8 +14,14 @@ export class UsersService {
     return this.usersRepository.find();
   }
 
-  findOne(id: number): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { id } });
+  async findOne(options: { id?: number; username?: string }) {
+    const { id, username } = options;
+    if (!id && !username) {
+      throw new Error('Either id or username must be provided');
+    }
+    return this.usersRepository.findOne({
+      where: id ? { id } : { username },
+    });
   }
 
   async remove(id: number): Promise<void> {
@@ -28,6 +34,6 @@ export class UsersService {
 
   async update(id: number, userData: Partial<User>): Promise<User | null> {
     await this.usersRepository.update(id, userData);
-    return this.findOne(id);
+    return this.findOne({id});
   }
 }
