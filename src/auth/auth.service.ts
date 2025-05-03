@@ -9,7 +9,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async signIn(
+  async logIn(
     username: string,
     pass: string,
   ): Promise<{ access_token: string }> {
@@ -19,5 +19,15 @@ export class AuthService {
     }
     const payload = { sub: user.id, username: user.username };
     return { access_token: await this.jwtService.signAsync(payload) };
+  }
+
+  async signUp(
+    username: string,
+    pass: string,
+  ): Promise<{ access_token: string }> {
+    const newUser = await this.usersService.create({username:username, password:pass});
+    const payload = { sub:newUser.id, username:newUser.username };
+    const  {password, ...userWithoutPassword} = newUser;
+    return { ...userWithoutPassword, access_token: await this.jwtService.signAsync(payload) };
   }
 }
