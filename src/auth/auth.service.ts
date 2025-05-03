@@ -17,7 +17,7 @@ export class AuthService {
     if (user?.password !== pass) {
       throw new UnauthorizedException();
     }
-    const payload = { sub: user.id, username: user.username };
+    const payload = { sub: user.id, username: user.username, role: user.role };
     return { access_token: await this.jwtService.signAsync(payload) };
   }
 
@@ -26,7 +26,7 @@ export class AuthService {
     pass: string,
   ): Promise<{ access_token: string }> {
     const newUser = await this.usersService.create({username:username, password:pass});
-    const payload = { sub:newUser.id, username:newUser.username };
+    const payload = { sub:newUser.id, username:newUser.username, role: newUser.role };
     const  {password, ...userWithoutPassword} = newUser;
     return { ...userWithoutPassword, access_token: await this.jwtService.signAsync(payload) };
   }
