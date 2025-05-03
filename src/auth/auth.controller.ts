@@ -16,10 +16,16 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @HttpCode(HttpStatus.OK)
-  @Post('login')
-  signIn(@Body() signInDto: Record<string, any>) {
-    return this.authService.signIn(signInDto.username, signInDto.password);
+  @Post('signup')
+  signUp(@Body() signUpDto: Record<string, any>) {
+    return this.authService.signUp(signUpDto.username, signUpDto.password);
   }
+  @HttpCode(HttpStatus.OK)
+  @Post('login')
+  logIn(@Body() signInDto: Record<string, any>) {
+    return this.authService.logIn(signInDto.username, signInDto.password);
+  }
+
 
   @UseGuards(AuthGuard)
   @Get('profile')
