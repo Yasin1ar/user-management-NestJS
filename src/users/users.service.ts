@@ -34,6 +34,6 @@ export class UsersService {
 
   async update(id: number, userData: Partial<User>): Promise<User | null> {
     await this.usersRepository.update(id, userData);
-    return this.findOne({id});
+    return this.findOne({ id });
   }
 }

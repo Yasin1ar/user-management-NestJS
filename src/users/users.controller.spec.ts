@@ -73,14 +73,14 @@ describe('UsersController', () => {
     jest.spyOn(service, 'findOne').mockResolvedValue(mockUser);
 
     expect(await controller.findOne('1')).toEqual(mockUser);
-    expect(service.findOne).toHaveBeenCalledWith({"id":1});
+    expect(service.findOne).toHaveBeenCalledWith({ id: 1 });
   });
 
   it('should return null when user not found', async () => {
     jest.spyOn(service, 'findOne').mockResolvedValue(null);
 
     expect(await controller.findOne('999')).toBeNull();
-    expect(service.findOne).toHaveBeenCalledWith({"id":999});
+    expect(service.findOne).toHaveBeenCalledWith({ id: 999 });
   });
 
   it('should update a user', async () => {

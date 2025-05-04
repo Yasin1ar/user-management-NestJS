@@ -57,7 +57,7 @@ describe('UsersService', () => {
     };
     repository.findOne.mockResolvedValue(mockUser);
 
-    expect(await service.findOne({"id":1})).toEqual(mockUser);
+    expect(await service.findOne({ id: 1 })).toEqual(mockUser);
     expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
   });
 
