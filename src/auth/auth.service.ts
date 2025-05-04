@@ -25,9 +25,19 @@ export class AuthService {
     username: string,
     pass: string,
   ): Promise<{ access_token: string }> {
-    const newUser = await this.usersService.create({username:username, password:pass});
-    const payload = { sub:newUser.id, username:newUser.username, role: newUser.role };
-    const  {password, ...userWithoutPassword} = newUser;
-    return { ...userWithoutPassword, access_token: await this.jwtService.signAsync(payload) };
+    const newUser = await this.usersService.create({
+      username: username,
+      password: pass,
+    });
+    const payload = {
+      sub: newUser.id,
+      username: newUser.username,
+      role: newUser.role,
+    };
+    const { password, ...userWithoutPassword } = newUser;
+    return {
+      ...userWithoutPassword,
+      access_token: await this.jwtService.signAsync(payload),
+    };
   }
 }

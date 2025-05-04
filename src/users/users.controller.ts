@@ -6,13 +6,13 @@ import {
   Param,
   Delete,
   Patch,
-  UseGuards
+  UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
-import { RolesGuard } from '../auth/roles.guard';
-import { AuthGuard } from '../auth/auth.guard'; 
-import { Roles } from '@/auth/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { AuthGuard } from '../auth/guards/auth.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @UseGuards(AuthGuard, RolesGuard)
 @Roles('admin')

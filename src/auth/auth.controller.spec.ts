@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthDto } from './auth.dto';
-import { AuthGuard } from './auth.guard';
+import { AuthGuard } from './guards/auth.guard';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -16,9 +16,7 @@ describe('AuthController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [
-        { provide: AuthService, useValue: authService },
-      ],
+      providers: [{ provide: AuthService, useValue: authService }],
     })
       .overrideGuard(AuthGuard)
       .useValue({
@@ -36,7 +34,10 @@ describe('AuthController', () => {
       (authService.signUp as jest.Mock).mockResolvedValue(expected);
 
       const result = await controller.signUp(dto);
-      expect(authService.signUp).toHaveBeenCalledWith('testuser', 'password123');
+      expect(authService.signUp).toHaveBeenCalledWith(
+        'testuser',
+        'password123',
+      );
       expect(result).toEqual(expected);
     });
   });
