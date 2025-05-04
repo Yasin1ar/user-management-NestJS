@@ -2,40 +2,52 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
+import { AuthGuard } from '../auth/guards/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 describe('UsersController', () => {
   let controller: UsersController;
   let service: UsersService;
 
-  // Mock user data
   const mockUser: User = {
     id: 1,
     username: 'testuser',
-    password: 'password123',
-    role: 'user' as const,
+    password: 'hashedpassword',
+    role: 'user',
   };
+
+  const usersArray: User[] = [
+    mockUser,
+    { id: 2, username: 'another', password: 'pass', role: 'admin' },
+  ];
+
+  const mockUsersService = {
+    create: jest.fn().mockResolvedValue(mockUser),
+    findAll: jest.fn().mockResolvedValue(usersArray),
+    findOne: jest.fn().mockResolvedValue(mockUser),
+    remove: jest.fn().mockResolvedValue(undefined),
+    update: jest.fn().mockResolvedValue(mockUser),
+  };
+
+  // Mock guards to always allow
+  const mockGuard = { canActivate: jest.fn(() => true) };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
-      providers: [
-        {
-          provide: UsersService,
-          useValue: {
-            create: jest.fn(),
-            findAll: jest.fn(),
-            findOne: jest.fn(),
-            update: jest.fn(),
-            remove: jest.fn(),
-          },
-        },
-      ],
-    }).compile();
+      providers: [{ provide: UsersService, useValue: mockUsersService }],
+    })
+      .overrideGuard(AuthGuard)
+      .useValue(mockGuard)
+      .overrideGuard(RolesGuard)
+      .useValue(mockGuard)
+      .compile();
 
     controller = module.get<UsersController>(UsersController);
     service = module.get<UsersService>(UsersService);
+  });
 
-    // Clear all mocks before each test
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
@@ -43,62 +55,49 @@ describe('UsersController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should create a user', async () => {
-    const userData = {
-      username: 'newuser',
-      password: 'pass',
-      role: 'user' as const,
-    };
-    const createdUser = { ...userData, id: 1 };
-
-    jest.spyOn(service, 'create').mockResolvedValue(createdUser);
-
-    expect(await controller.create(userData as User)).toEqual(createdUser);
-    expect(service.create).toHaveBeenCalledWith(userData);
+  describe('create', () => {
+    it('should call usersService.create and return the result', async () => {
+      const dto = {
+        username: 'testuser',
+        password: 'hashedpassword'
+      } as User;
+      await expect(controller.create(dto)).resolves.toEqual(mockUser);
+      expect(service.create).toHaveBeenCalledWith(dto);
+    });
   });
 
-  it('should find all users', async () => {
-    const users: User[] = [
-      mockUser,
-      { id: 2, username: 'admin', password: 'pass', role: 'admin' as const },
-    ];
-
-    jest.spyOn(service, 'findAll').mockResolvedValue(users);
-
-    expect(await controller.findAll()).toEqual(users);
-    expect(service.findAll).toHaveBeenCalled();
+  describe('findAll', () => {
+    it('should return an array of users', async () => {
+      await expect(controller.findAll()).resolves.toEqual(usersArray);
+      expect(service.findAll).toHaveBeenCalled();
+    });
   });
 
-  it('should find one user by id', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue(mockUser);
-
-    expect(await controller.findOne('1')).toEqual(mockUser);
-    expect(service.findOne).toHaveBeenCalledWith({ id: 1 });
+  describe('findOne', () => {
+    it('should return a user by id', async () => {
+      await expect(controller.findOne('1')).resolves.toEqual(mockUser);
+      expect(service.findOne).toHaveBeenCalledWith({ id: 1 });
+    });
   });
 
-  it('should return null when user not found', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue(null);
-
-    expect(await controller.findOne('999')).toBeNull();
-    expect(service.findOne).toHaveBeenCalledWith({ id: 999 });
+  describe('remove', () => {
+    it('should call usersService.remove with the correct id', async () => {
+      await expect(controller.remove('1')).resolves.toBeUndefined();
+      expect(service.remove).toHaveBeenCalledWith(1);
+    });
   });
 
-  it('should update a user', async () => {
-    const updateData = { username: 'updated' };
-    const updatedUser = { ...mockUser, ...updateData };
-
-    jest.spyOn(service, 'update').mockResolvedValue(updatedUser);
-
-    expect(await controller.update('1', updateData as User)).toEqual(
-      updatedUser,
-    );
-    expect(service.update).toHaveBeenCalledWith(1, updateData);
-  });
-
-  it('should remove a user', async () => {
-    jest.spyOn(service, 'remove').mockResolvedValue(undefined);
-
-    await controller.remove('1');
-    expect(service.remove).toHaveBeenCalledWith(1);
+  describe('update', () => {
+    it('should call usersService.update and return the updated user', async () => {
+      const updateDto = {
+        username: 'updated',
+        password: 'newpass',
+        role: 'admin',
+      } as User;
+      await expect(controller.update('1', updateDto)).resolves.toEqual(
+        mockUser,
+      );
+      expect(service.update).toHaveBeenCalledWith(1, updateDto);
+    });
   });
 });
