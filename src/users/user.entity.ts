@@ -18,4 +18,6 @@ export class User {
     enum: ['user', 'admin'],
   })
   role: 'user' | 'admin';
+  @Column({ type: 'text', nullable: true })
+  refreshToken: string | null;
 }

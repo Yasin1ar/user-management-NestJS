@@ -59,7 +59,7 @@ describe('UsersController', () => {
     it('should call usersService.create and return the result', async () => {
       const dto = {
         username: 'testuser',
-        password: 'hashedpassword'
+        password: 'hashedpassword',
       } as User;
       await expect(controller.create(dto)).resolves.toEqual(mockUser);
       expect(service.create).toHaveBeenCalledWith(dto);
