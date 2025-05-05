@@ -2,10 +2,11 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  Body,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
-import * as bcrypt from 'bcrypt';
+import { AuthDto } from './auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -14,19 +15,22 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async signup(username: string, password: string) {
-    // If user exists, throw
-    const existing = await this.usersService.findOne({ username });
+  async signup(@Body() signUpDto: AuthDto) {
+    const existing = await this.usersService.findOne({
+      username: signUpDto.username,
+    });
     if (existing) {
       throw new ConflictException('Username already taken');
     }
-    const user = await this.usersService.create({ username, password });
+    const user = await this.usersService.create(signUpDto);
     const tokens = await this.generateTokensByUserId(user.id);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
     return tokens;
   }
 
-  async login(username: string, password: string) {
+  async login(@Body() loginDto: AuthDto) {
+    const { username, password } = loginDto;
+
     const user = await this.usersService.findOne({ username });
     if (!user || user.password !== password) {
       throw new UnauthorizedException('Invalid credentials');
@@ -43,12 +47,12 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('User not found');
 
     const accessToken = await this.jwtService.signAsync(
-      { sub: user.id, username: user.username },
+      { sub: user.id, username: user.username, role: user.role },
       { expiresIn: '15m' },
     );
 
     const refreshToken = await this.jwtService.signAsync(
-      { sub: user.id },
+      {sub: user.id, username: user.username, role: user.role },
       { expiresIn: '7d' },
     );
 
@@ -56,7 +60,6 @@ export class AuthService {
   }
 
   async storeRefreshToken(userId: number, refreshToken: string) {
-    // Store literally; for passing e2e do not hash!
     await this.usersService.update(userId, { refreshToken });
   }
 

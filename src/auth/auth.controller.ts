@@ -28,11 +28,7 @@ export class AuthController {
   @Post('signup')
   async signup(@Body() signUpDto: AuthDto) {
     try {
-      // Only expect username/password in body
-      const tokens = await this.authService.signup(
-        signUpDto.username,
-        signUpDto.password,
-      );
+      const tokens = await this.authService.signup(signUpDto);
       return tokens; // { accessToken, refreshToken }
     } catch (e) {
       // Show error for test debugging
@@ -42,10 +38,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Res({ passthrough: true }) res, @Body() loginDto: AuthDto) {
+    console.log(res.body)
     try {
       const { accessToken, refreshToken } = await this.authService.login(
-        loginDto.username,
-        loginDto.password,
+loginDto
       );
       return { accessToken, refreshToken };
     } catch (e) {
