@@ -1,4 +1,3 @@
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -51,7 +50,10 @@ describe('AuthController', () => {
 
       const result = await controller.signup(dto);
 
-      expect(authService.signup).toHaveBeenCalledWith(dto.username, dto.password);
+      expect(authService.signup).toHaveBeenCalledWith(
+        dto.username,
+        dto.password,
+      );
       expect(result).toEqual(tokens);
     });
   });
@@ -67,7 +69,10 @@ describe('AuthController', () => {
 
       const result = await controller.login(res, dto);
 
-      expect(authService.login).toHaveBeenCalledWith(dto.username, dto.password);
+      expect(authService.login).toHaveBeenCalledWith(
+        dto.username,
+        dto.password,
+      );
       expect(result).toEqual(tokens);
     });
   });
@@ -86,20 +91,28 @@ describe('AuthController', () => {
     const tokens = { accessToken: 'new-access', refreshToken: 'new-refresh' };
 
     it('should throw if no authorization header', async () => {
-      await expect(controller.refresh('')).rejects.toThrow(UnauthorizedException);
-      await expect(controller.refresh('Basic something')).rejects.toThrow(UnauthorizedException);
+      await expect(controller.refresh('')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      await expect(controller.refresh('Basic something')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw if jwtService.verifyAsync fails', async () => {
       mockJwtService.verifyAsync.mockRejectedValue(new Error('invalid'));
-      await expect(controller.refresh('Bearer badtoken')).rejects.toThrow(UnauthorizedException);
+      await expect(controller.refresh('Bearer badtoken')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw if verifyRefreshToken returns false', async () => {
       mockJwtService.verifyAsync.mockResolvedValue({ sub: userId });
       mockAuthService.verifyRefreshToken.mockResolvedValue(false);
 
-      await expect(controller.refresh(`Bearer ${refreshToken}`)).rejects.toThrow(UnauthorizedException);
+      await expect(
+        controller.refresh(`Bearer ${refreshToken}`),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should return new tokens if refresh is valid', async () => {
@@ -111,9 +124,15 @@ describe('AuthController', () => {
       const result = await controller.refresh(`Bearer ${refreshToken}`);
 
       expect(jwtService.verifyAsync).toHaveBeenCalledWith(refreshToken);
-      expect(authService.verifyRefreshToken).toHaveBeenCalledWith(userId, refreshToken);
+      expect(authService.verifyRefreshToken).toHaveBeenCalledWith(
+        userId,
+        refreshToken,
+      );
       expect(authService.generateTokensByUserId).toHaveBeenCalledWith(userId);
-      expect(authService.updateRefreshToken).toHaveBeenCalledWith(userId, tokens.refreshToken);
+      expect(authService.updateRefreshToken).toHaveBeenCalledWith(
+        userId,
+        tokens.refreshToken,
+      );
       expect(result).toEqual(tokens);
     });
   });

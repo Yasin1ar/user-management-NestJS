@@ -1,4 +1,3 @@
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
@@ -66,11 +65,15 @@ describe('UsersService', () => {
 
       const result = await service.findOne({ username: 'b' });
       expect(result).toEqual(user);
-      expect(repository.findOne).toHaveBeenCalledWith({ where: { username: 'b' } });
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { username: 'b' },
+      });
     });
 
     it('should throw if neither id nor username is provided', async () => {
-      await expect(service.findOne({})).rejects.toThrow('Either id or username must be provided');
+      await expect(service.findOne({})).rejects.toThrow(
+        'Either id or username must be provided',
+      );
     });
   });
 
@@ -90,11 +93,17 @@ describe('UsersService', () => {
         service.create({ username: 'taken', password: 'pw' }),
       ).rejects.toThrow(ConflictException);
 
-      expect(repository.findOne).toHaveBeenCalledWith({ where: { username: 'taken' } });
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { username: 'taken' },
+      });
     });
 
     it('should create and save user if username is unique', async () => {
-      const userData = { username: 'unique', password: 'pw', role: 'user' as const };
+      const userData = {
+        username: 'unique',
+        password: 'pw',
+        role: 'user' as const,
+      };
       const createdUser = { ...userData, id: 2 };
       repository.findOne.mockResolvedValue(undefined);
       repository.create.mockReturnValue(userData);
@@ -109,7 +118,12 @@ describe('UsersService', () => {
 
   describe('update', () => {
     it('should update and return the user', async () => {
-      const updatedUser = { id: 1, username: 'new', password: 'pw', role: 'user' as const };
+      const updatedUser = {
+        id: 1,
+        username: 'new',
+        password: 'pw',
+        role: 'user' as const,
+      };
       repository.update.mockResolvedValue({ affected: 1 });
       repository.findOne.mockResolvedValue(updatedUser);
 

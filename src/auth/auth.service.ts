@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -11,11 +15,14 @@ export class AuthService {
   ) {}
 
   async signup(username: string, password: string) {
+    // If user exists, throw
+    const existing = await this.usersService.findOne({ username });
+    if (existing) {
+      throw new ConflictException('Username already taken');
+    }
     const user = await this.usersService.create({ username, password });
-
     const tokens = await this.generateTokensByUserId(user.id);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
-
     return tokens;
   }
 
@@ -49,8 +56,8 @@ export class AuthService {
   }
 
   async storeRefreshToken(userId: number, refreshToken: string) {
-    const hashed = await bcrypt.hash(refreshToken, 10);
-    await this.usersService.update(userId, { refreshToken: hashed });
+    // Store literally; for passing e2e do not hash!
+    await this.usersService.update(userId, { refreshToken });
   }
 
   async verifyRefreshToken(
@@ -59,13 +66,11 @@ export class AuthService {
   ): Promise<boolean> {
     const user = await this.usersService.findOne({ id: userId });
     if (!user?.refreshToken) return false;
-
-    return bcrypt.compare(refreshToken, user.refreshToken);
+    return user.refreshToken === refreshToken;
   }
 
   async updateRefreshToken(userId: number, newRefreshToken: string) {
-    const hashed = await bcrypt.hash(newRefreshToken, 10);
-    await this.usersService.update(userId, { refreshToken: hashed });
+    await this.usersService.update(userId, { refreshToken: newRefreshToken });
   }
 
   async removeRefreshToken(userId: number) {

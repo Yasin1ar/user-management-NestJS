@@ -10,6 +10,7 @@ import {
   Request,
   UseGuards,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from './guards/auth.guard';
 import { AuthService } from './auth.service';
@@ -23,19 +24,33 @@ export class AuthController {
     private readonly jwtService: JwtService,
   ) {}
 
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.CREATED)
   @Post('signup')
-  signup(@Body() signUpDto: AuthDto) {
-    return this.authService.signup(signUpDto.username, signUpDto.password);
+  async signup(@Body() signUpDto: AuthDto) {
+    try {
+      // Only expect username/password in body
+      const tokens = await this.authService.signup(
+        signUpDto.username,
+        signUpDto.password,
+      );
+      return tokens; // { accessToken, refreshToken }
+    } catch (e) {
+      // Show error for test debugging
+      throw new BadRequestException(e.message || 'Signup failed');
+    }
   }
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Res({ passthrough: true }) res, @Body() loginDto: AuthDto) {
-    const { accessToken, refreshToken } = await this.authService.login(
-      loginDto.username,
-      loginDto.password,
-    );
-    return { accessToken, refreshToken };
+    try {
+      const { accessToken, refreshToken } = await this.authService.login(
+        loginDto.username,
+        loginDto.password,
+      );
+      return { accessToken, refreshToken };
+    } catch (e) {
+      throw new BadRequestException(e.message || 'Login failed');
+    }
   }
 
   @UseGuards(AuthGuard)
