@@ -1,7 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  Body,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
-import * as bcrypt from 'bcrypt';
+import { AuthDto } from './auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -10,16 +15,22 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async signup(username: string, password: string) {
-    const user = await this.usersService.create({ username, password });
-
+  async signup(@Body() signUpDto: AuthDto) {
+    const existing = await this.usersService.findOne({
+      username: signUpDto.username,
+    });
+    if (existing) {
+      throw new ConflictException('Username already taken');
+    }
+    const user = await this.usersService.create(signUpDto);
     const tokens = await this.generateTokensByUserId(user.id);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
-
     return tokens;
   }
 
-  async login(username: string, password: string) {
+  async login(@Body() loginDto: AuthDto) {
+    const { username, password } = loginDto;
+
     const user = await this.usersService.findOne({ username });
     if (!user || user.password !== password) {
       throw new UnauthorizedException('Invalid credentials');
@@ -36,12 +47,12 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('User not found');
 
     const accessToken = await this.jwtService.signAsync(
-      { sub: user.id, username: user.username },
+      { sub: user.id, username: user.username, role: user.role },
       { expiresIn: '15m' },
     );
 
     const refreshToken = await this.jwtService.signAsync(
-      { sub: user.id },
+      {sub: user.id, username: user.username, role: user.role },
       { expiresIn: '7d' },
     );
 
@@ -49,8 +60,7 @@ export class AuthService {
   }
 
   async storeRefreshToken(userId: number, refreshToken: string) {
-    const hashed = await bcrypt.hash(refreshToken, 10);
-    await this.usersService.update(userId, { refreshToken: hashed });
+    await this.usersService.update(userId, { refreshToken });
   }
 
   async verifyRefreshToken(
@@ -59,13 +69,11 @@ export class AuthService {
   ): Promise<boolean> {
     const user = await this.usersService.findOne({ id: userId });
     if (!user?.refreshToken) return false;
-
-    return bcrypt.compare(refreshToken, user.refreshToken);
+    return user.refreshToken === refreshToken;
   }
 
   async updateRefreshToken(userId: number, newRefreshToken: string) {
-    const hashed = await bcrypt.hash(newRefreshToken, 10);
-    await this.usersService.update(userId, { refreshToken: hashed });
+    await this.usersService.update(userId, { refreshToken: newRefreshToken });
   }
 
   async removeRefreshToken(userId: number) {

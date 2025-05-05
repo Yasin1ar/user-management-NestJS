@@ -7,6 +7,7 @@ import {
   Delete,
   Patch,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
@@ -14,7 +15,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(RolesGuard)
 @Roles('admin')
 @Controller('users')
 export class UsersController {
@@ -31,7 +32,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<User | null> {
+  findOne(@Param('id') id: string): Promise<User | NotFoundException> {
     return this.usersService.findOne({ id: +id });
   }
 
@@ -41,7 +42,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() user: User): Promise<User | null> {
+  update(@Param('id') id: string, @Body() user: User) {
     return this.usersService.update(+id, user);
   }
 }

@@ -19,10 +19,10 @@ describe('UsersService Integration with Testcontainers', () => {
   jest.setTimeout(60000);
 
   beforeAll(async () => {
-    console.log('Starting PostgreSQL container...');
+    console.info('Starting PostgreSQL container...');
     pgContainer = await new PostgreSqlContainer() // Defaults: postgres:latest, user/pw=test, db=test
       .start();
-    console.log('PostgreSQL container started.');
+    console.info('PostgreSQL container started.');
 
     // Configure TypeORM to connect to the containerized database
     moduleFixture = await Test.createTestingModule({
@@ -52,13 +52,13 @@ describe('UsersService Integration with Testcontainers', () => {
   });
 
   afterAll(async () => {
-    console.log('Closing module...');
+    console.info('Closing module...');
     await moduleFixture.close();
 
     if (pgContainer) {
-      console.log('Stopping PostgreSQL container...');
+      console.info('Stopping PostgreSQL container...');
       await pgContainer.stop();
-      console.log('PostgreSQL container stopped.');
+      console.info('PostgreSQL container stopped.');
     }
   });
 
