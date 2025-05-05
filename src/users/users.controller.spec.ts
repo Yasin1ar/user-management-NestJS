@@ -14,11 +14,12 @@ describe('UsersController', () => {
     username: 'testuser',
     password: 'hashedpassword',
     role: 'user',
+    refreshToken: null
   };
 
   const usersArray: User[] = [
     mockUser,
-    { id: 2, username: 'another', password: 'pass', role: 'admin' },
+    { id: 2, username: 'another', password: 'pass', role: 'admin', refreshToken: null },
   ];
 
   const mockUsersService = {
