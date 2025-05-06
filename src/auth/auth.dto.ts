@@ -1,16 +1,4 @@
-/**
- * User authentication (Sign Up & Login) Data Transfer Object
- *
- * This DTO validates user authentication data with the following rules:
- * - Username is required, must not be empty, and must be a string
- * - Password is required, must not be empty, and must be a string
- * - Role must be either 'user' or 'admin', defaults to 'user'
- *
- * The class uses class-validator decorators for validation
- */
-import { IsString, IsNotEmpty, MinLength, IsOptional } from 'class-validator';
-
-
+import { IsString, IsNotEmpty, MinLength, IsOptional, IsIn } from 'class-validator';
 
 export class AuthDto {
   @IsString()
@@ -23,6 +11,6 @@ export class AuthDto {
   password: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['user', 'admin'], { message: 'Role must be either "user" or "admin"' })
   role: 'user' | 'admin' = 'user';
 }
