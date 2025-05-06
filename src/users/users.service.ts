@@ -1,8 +1,12 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
-import { AuthDto } from '@/auth/auth.dto';
 
 @Injectable()
 export class UsersService {
@@ -18,7 +22,7 @@ export class UsersService {
   async findOne(options: { id?: number; username?: string }) {
     const { id, username } = options;
     if (!id && !username) {
-      throw new Error('Either id or username must be provided');
+      throw new BadRequestException('Either id or username must be provided');
     }
     const user = await this.usersRepository.findOne({
       where: id ? { id } : { username },
@@ -33,15 +37,18 @@ export class UsersService {
     await this.usersRepository.delete(id);
   }
 
-  async create(user: AuthDto): Promise<User> {
-    const { username } = user;
+  async create(
+    username: string,
+    password: string,
+    role: 'user' | 'admin' = 'user',
+  ): Promise<User> {
     const checkDuplicate = await this.usersRepository.findOne({
       where: { username },
     });
     if (checkDuplicate) {
       throw new ConflictException(`Username '${username}' already exists.`);
     }
-    const newUser = this.usersRepository.create(user);
+    const newUser = this.usersRepository.create({ username, password, role });
     return this.usersRepository.save(newUser);
   }
 

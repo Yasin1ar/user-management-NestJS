@@ -5,19 +5,19 @@ export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: false })
+  @Column({ nullable: false, length: 255, unique: true })
   username: string;
 
-  @Column({ nullable: false })
+  @Column({ nullable: false, length: 255 })
   password: string;
 
   @Column({
-    type: 'varchar',
-    default: 'user',
-    nullable: false,
+    type: 'enum',
     enum: ['user', 'admin'],
+    default: 'user',
   })
   role: 'user' | 'admin';
-  @Column({ type: 'text', nullable: true })
+
+  @Column({ type: 'text', nullable: true, default: null })
   refreshToken: string | null;
 }
