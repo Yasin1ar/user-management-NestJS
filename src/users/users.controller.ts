@@ -14,16 +14,21 @@ import { User } from './user.entity';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { Roles } from '../auth/roles.decorator';
+import { AuthDto } from '@/auth/auth.dto';
 
-@UseGuards(RolesGuard)
+@UseGuards(AuthGuard, RolesGuard)
 @Roles('admin')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  create(@Body() user: User): Promise<User> {
-    return this.usersService.create(user);
+  create(@Body() userDto: AuthDto): Promise<User> {
+    return this.usersService.create(
+      userDto.username,
+      userDto.password,
+      userDto.role,
+    );
   }
 
   @Get()
@@ -42,7 +47,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() user: User) {
-    return this.usersService.update(+id, user);
+  update(@Param('id') id: string, @Body() userDto: AuthDto) {
+    return this.usersService.update(+id, userDto);
   }
 }

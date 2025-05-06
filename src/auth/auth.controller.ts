@@ -16,19 +16,26 @@ import { AuthGuard } from './guards/auth.guard';
 import { AuthService } from './auth.service';
 import { AuthDto } from './auth.dto';
 import { JwtService } from '@nestjs/jwt';
+import { UsersService } from '@/users/users.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
+    private userService: UsersService,
     private readonly jwtService: JwtService,
   ) {}
 
   @HttpCode(HttpStatus.CREATED)
   @Post('signup')
   async signup(@Body() signUpDto: AuthDto) {
+    const username = signUpDto.username.toLowerCase(); 
     try {
-      const tokens = await this.authService.signup(signUpDto);
+      const tokens = await this.authService.signup(
+        username,
+        signUpDto.password,
+        signUpDto.role,
+      );
       return tokens; // { accessToken, refreshToken }
     } catch (e) {
       // Show error for test debugging
@@ -38,10 +45,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Res({ passthrough: true }) res, @Body() loginDto: AuthDto) {
-    console.log(res.body)
+    const username = loginDto.username.toLowerCase(); 
     try {
       const { accessToken, refreshToken } = await this.authService.login(
-loginDto
+        username,
+        loginDto.password,
       );
       return { accessToken, refreshToken };
     } catch (e) {
@@ -51,8 +59,11 @@ loginDto
 
   @UseGuards(AuthGuard)
   @Get('profile')
-  getProfile(@Request() req) {
-    return req.user;
+  async getProfile(@Request() req) {
+    const id = req.user.sub;
+    const user = await this.userService.findOne({id})
+    const {refreshToken, ...restOfUser} = user;
+    return restOfUser;
   }
 
   @Post('refresh')

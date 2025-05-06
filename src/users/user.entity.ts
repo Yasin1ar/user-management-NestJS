@@ -14,10 +14,10 @@ export class User {
   @Column({
     type: 'enum',
     enum: ['user', 'admin'],
-    default: 'user'
+    default: 'user',
   })
   role: 'user' | 'admin';
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, default: null })
   refreshToken: string | null;
 }
