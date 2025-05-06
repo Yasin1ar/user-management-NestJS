@@ -129,4 +129,12 @@ export class AuthController {
 
     return { message: 'User deleted successfully' };
   }
+  @UseGuards(AuthGuard)
+  @Post('change-password')
+  async changePass(@Request() req, @Body() passwords:{password:string, new_password:string}) {
+    const id = req.user.sub;
+    const {password, new_password} = passwords;
+    const changedPass = await this.authService.changePassword(id, password, new_password);
+    return {message:"successfully changed", password:changedPass.password};
+  }
 }

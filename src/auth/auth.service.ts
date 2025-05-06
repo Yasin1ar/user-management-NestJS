@@ -4,10 +4,12 @@ import {
   ConflictException,
   Body,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { v4 as uuidv4 } from 'uuid';
+import { User } from '@/users/user.entity';
 @Injectable()
 export class AuthService {
   constructor(
@@ -133,5 +135,34 @@ export class AuthService {
 
     await this.usersService.remove(userId);
     this.invalidateDeletionToken(token);
+  }
+
+  async changePassword(
+    userId: number, 
+    oldPassword: string, 
+    newPassword: string
+  ): Promise<User> {
+    // Validate password requirements
+    if (newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters long');
+    }
+
+    // Find user
+    const user = await this.usersService.findOne({id:userId});
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify old password
+    if (user.password !== oldPassword) {
+      throw new BadRequestException('Current password is incorrect');    }
+
+    // Check if new password is different
+    if (oldPassword === newPassword) {
+      throw new ConflictException('New password must be different from current password');
+    }
+
+    // Update user password
+    return this.usersService.update(user.id, { password: newPassword });
   }
 }
