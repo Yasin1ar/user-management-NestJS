@@ -11,6 +11,7 @@ import {
   UseGuards,
   UnauthorizedException,
   BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import { AuthGuard } from './guards/auth.guard';
 import { AuthService } from './auth.service';
@@ -29,7 +30,7 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @Post('signup')
   async signup(@Body() signUpDto: AuthDto) {
-    const username = signUpDto.username.toLowerCase(); 
+    const username = signUpDto.username.toLowerCase();
     try {
       const tokens = await this.authService.signup(
         username,
@@ -45,7 +46,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Res({ passthrough: true }) res, @Body() loginDto: AuthDto) {
-    const username = loginDto.username.toLowerCase(); 
+    const username = loginDto.username.toLowerCase();
     try {
       const { accessToken, refreshToken } = await this.authService.login(
         username,
@@ -61,8 +62,8 @@ export class AuthController {
   @Get('profile')
   async getProfile(@Request() req) {
     const id = req.user.sub;
-    const user = await this.userService.findOne({id})
-    const {refreshToken, ...restOfUser} = user;
+    const user = await this.userService.findOne({ id });
+    const { refreshToken, ...restOfUser } = user;
     return restOfUser;
   }
 
@@ -93,5 +94,39 @@ export class AuthController {
     await this.authService.updateRefreshToken(userId, tokens.refreshToken);
 
     return tokens;
+  }
+
+  // Step 1: Generate deletion token
+  @UseGuards(AuthGuard)
+  @Post('delete-request')
+  async requestDeletion(@Request() req) {
+    const userId = req.user.sub;
+    const token = await this.authService.generateDeletionToken(userId);
+    return {
+      message:
+        'Are you sure you want to delete your account? Send DELETE /delete with confirmation, password, and this token.',
+      deletionToken: token,
+    };
+  }
+
+  // Step 2: Confirm deletion
+  @UseGuards(AuthGuard)
+  @Delete('delete')
+  async confirmDeletion(
+    @Request() req,
+    @Body()
+    body: { confirmation: string; password: string; deletionToken: string },
+  ) {
+    const userId = req.user.sub;
+    const { confirmation, password, deletionToken } = body;
+
+    await this.authService.deleteUser(
+      userId,
+      password,
+      deletionToken,
+      confirmation,
+    );
+
+    return { message: 'User deleted successfully' };
   }
 }
