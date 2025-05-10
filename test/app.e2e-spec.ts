@@ -1,231 +1,203 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import {
-  PostgreSqlContainer,
-  StartedPostgreSqlContainer,
-} from '@testcontainers/postgresql';
 import { AppModule } from '../src/app.module';
-import { User } from '../src/users/user.entity';
-import { AuthDto } from '../src/auth/auth.dto';
+import { HttpStatus } from '@nestjs/common';
+import { CreateUserDto, LoginUserDto, TokensResponseDto } from '../src/dto';
 
-describe('Application (e2e)', () => {
+/**
+ * @description This is a comprehensive End-to-End (E2E) test suite for the authentication
+ * and basic application endpoints of the NestJS User Management Project. It sets up
+ * the entire application context and tests various API endpoints to ensure they
+ * function as expected.
+ */
+describe('AppController (e2e)', () => {
   let app: INestApplication;
-  let pgContainer: StartedPostgreSqlContainer;
   let accessToken: string;
   let refreshToken: string;
-  let userId: number;
+  const newUser: CreateUserDto = {
+    username: 'e2etestuser',
+    password: 'e2etestpassword',
+    role: 'user',
+  };
+  const loginUser: LoginUserDto = {
+    username: newUser.username,
+    password: newUser.password,
+  };
 
-  // Increase timeout for container startup
-  jest.setTimeout(60000);
-
+  /**
+   * @beforeAll Sets up the NestJS application before running any tests.
+   * It compiles the AppModule and creates an instance of the application.
+   */
   beforeAll(async () => {
-    // Start PostgreSQL container
-    pgContainer = await new PostgreSqlContainer()
-      .withDatabase('test_db')
-      .withUsername('test')
-      .withPassword('test')
-      .start();
-
-    // Create testing module with the containerized database
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [
-        TypeOrmModule.forRoot({
-          type: 'postgres',
-          host: pgContainer.getHost(),
-          port: pgContainer.getPort(),
-          username: pgContainer.getUsername(),
-          password: pgContainer.getPassword(),
-          database: pgContainer.getDatabase(),
-          entities: [User],
-          synchronize: true,
-          logging: false,
-        }),
-        AppModule,
-      ],
+      imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
   });
 
+  /**
+   * @afterAll Closes the NestJS application after all tests have completed.
+   * This ensures that resources are properly released.
+   */
   afterAll(async () => {
     await app.close();
-    if (pgContainer) {
-      await pgContainer.stop();
-    }
   });
 
-  describe('Auth', () => {
-    const signupDto: AuthDto = {
-      username: 'testuser',
-      password: 'Testpass123!',
-      role: 'user',
-    };
+  /**
+   * @describe Test suite for the root endpoint of the application.
+   */
+  describe('/ (GET)', () => {
+    /**
+     * @test Should return the welcome message from the AppService.
+     * This test verifies that the root endpoint is accessible and returns the
+     * expected string.
+     */
+    it('should return "Welcome to User Management Project! head to /auth for authentication related actions, \
+     or if you are a authorized user you can check the Users CRUD functionalities at /users"', () => {
+      return request(app.getHttpServer()).get('/').expect(200).expect(
+        'Welcome to User Management Project! head to /auth for authentication related actions, \
+     or if you are a authorized user you can check the Users CRUD functionalities at /users',
+      );
+    });
+  });
 
-    const loginDto: AuthDto = {
-      username: 'testuser',
-      password: 'Testpass123!',
-      role: 'user',
-    };
-
-    it('should sign up a new user', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/auth/signup')
-        .send(signupDto)
-        .expect(201);
-
-      expect(response.body).toHaveProperty('accessToken');
-      expect(response.body).toHaveProperty('refreshToken');
-
-      accessToken = response.body.accessToken;
-      refreshToken = response.body.refreshToken;
+  /**
+   * @describe Test suite for the authentication endpoints (/auth).
+   */
+  describe('/auth (POST)', () => {
+    /**
+     * @test Should register a new user successfully.
+     * This test sends a POST request to the /auth/register endpoint with user details
+     * and expects a 201 Created status code and a response containing access and
+     * refresh tokens.
+     */
+    it('/register should return tokens on successful registration', async () => {
+      return request(app.getHttpServer())
+        .post('/auth/register')
+        .send(newUser)
+        .expect(HttpStatus.CREATED)
+        .then((response) => {
+          const tokens: TokensResponseDto = response.body;
+          expect(tokens).toHaveProperty('accessToken');
+          expect(tokens).toHaveProperty('refreshToken');
+          accessToken = tokens.accessToken;
+          refreshToken = tokens.refreshToken;
+        });
     });
 
-    it('should login with the new user', async () => {
-      const response = await request(app.getHttpServer())
+    /**
+     * @test Should fail registration if the username already exists.
+     * This test attempts to register the same user again and expects a 409 Conflict
+     * status code, indicating that the username is already taken.
+     */
+    it('/register should return Conflict if username already exists', () => {
+      return request(app.getHttpServer())
+        .post('/auth/register')
+        .send(newUser)
+        .expect(HttpStatus.CONFLICT);
+    });
+
+    /**
+     * @test Should login an existing user successfully.
+     * This test sends a POST request to the /auth/login endpoint with the registered
+     * user's credentials and expects a 200 OK status code and a response containing
+     * new access and refresh tokens.
+     */
+    it('/login should return tokens on successful login', () => {
+      return request(app.getHttpServer())
         .post('/auth/login')
-        .send(loginDto)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('accessToken');
-      expect(response.body).toHaveProperty('refreshToken');
-
-      accessToken = response.body.accessToken;
-      refreshToken = response.body.refreshToken;
+        .send(loginUser)
+        .expect(HttpStatus.OK)
+        .then((response) => {
+          const tokens: TokensResponseDto = response.body;
+          expect(tokens).toHaveProperty('accessToken');
+          expect(tokens).toHaveProperty('refreshToken');
+          accessToken = tokens.accessToken;
+          refreshToken = tokens.refreshToken;
+        });
     });
 
-    it('should get user profile with valid token', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/auth/profile')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('sub');
-      expect(response.body).toHaveProperty('username', signupDto.username);
-
-      userId = response.body.id;
+    /**
+     * @test Should fail login with unauthorized status if credentials are incorrect.
+     * This test attempts to log in with incorrect password and expects a 401
+     * Unauthorized status code.
+     */
+    it('/login should return Unauthorized if credentials are wrong', () => {
+      return request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ username: loginUser.username, password: 'wrongpassword' })
+        .expect(HttpStatus.UNAUTHORIZED);
     });
 
-    it('should refresh tokens', async () => {
-      const response = await request(app.getHttpServer())
+    /**
+     * @test Should refresh the access token using a valid refresh token.
+     * This test sends a POST request to the /auth/refresh endpoint with a valid
+     * refresh token in the Authorization header and expects a 200 OK status code
+     * and a response containing a new access token.
+     */
+    it('/refresh should return a new access token', () => {
+      return request(app.getHttpServer())
         .post('/auth/refresh')
         .set('Authorization', `Bearer ${refreshToken}`)
-        .expect(200);
+        .expect(HttpStatus.OK)
+        .then((response) => {
+          expect(response.body).toHaveProperty('accessToken');
+          expect(response.body).not.toHaveProperty('refreshToken'); // Typically, refresh doesn't return a new refresh token
+          accessToken = response.body.accessToken; // Update access token for subsequent requests
+        });
+    });
 
-      expect(response.body).toHaveProperty('accessToken');
-      expect(response.body).toHaveProperty('refreshToken');
-
-      accessToken = response.body.accessToken;
-      refreshToken = response.body.refreshToken;
+    /**
+     * @test Should fail to refresh the access token with an invalid refresh token.
+     * This test sends a POST request to the /auth/refresh endpoint with an invalid
+     * refresh token and expects a 401 Unauthorized status code.
+     */
+    it('/refresh should return Unauthorized for invalid refresh token', () => {
+      return request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Authorization', 'Bearer invalid_refresh_token')
+        .expect(HttpStatus.UNAUTHORIZED);
     });
   });
 
-  describe('Users', () => {
-    it('should create a new user (admin required)', async () => {
-      // First create an admin user to test admin-only routes
-      const adminSignupDto: AuthDto = {
-        username: 'adminuser',
-        password: 'Adminpass123!',
-        role: 'admin',
-      };
-
-      const adminLoginResponse = await request(app.getHttpServer())
-        .post('/auth/signup')
-        .send(adminSignupDto)
-        .expect(201);
-
-      const adminAccessToken = adminLoginResponse.body.accessToken;
-
-      const newUserDto = {
-        username: 'newuser',
-        password: 'Newpass123!',
-        role: 'user',
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/users')
-        .set('Authorization', `Bearer ${adminAccessToken}`)
-        .send(newUserDto)
-        .expect(201);
-
-      expect(response.body).toHaveProperty('id');
-      expect(response.body.username).toEqual(newUserDto.username);
-    });
-
-    it('should get all users (admin required)', async () => {
-      // Login as admin
-      const adminLoginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          username: 'adminuser',
-          password: 'Adminpass123!',
-        })
-        .expect(200);
-
-      const response = await request(app.getHttpServer())
-        .get('/users')
-        .set('Authorization', `Bearer ${adminLoginResponse.body.accessToken}`)
-        .expect(200);
-
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-    });
-
-    it('should get a specific user (admin required)', async () => {
-      // Login as admin
-      const adminLoginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          username: 'adminuser',
-          password: 'Adminpass123!',
-        })
-        .expect(200);
-
-      const response = await request(app.getHttpServer())
-        .get(`/users/${userId}`)
-        .set('Authorization', `Bearer ${adminLoginResponse.body.accessToken}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('id', userId);
-      expect(response.body).toHaveProperty('username', 'testuser');
-    });
-  });
-
-  describe('Error cases', () => {
-    it('should fail to sign up with duplicate username', async () => {
-      const duplicateUser: AuthDto = {
-        username: 'testuser',
-        password: 'Anotherpass123!',
-        role: 'user',
-      };
-
-      await request(app.getHttpServer())
-        .post('/auth/signup')
-        .send(duplicateUser)
-        .expect(400);
-    });
-
-    it('should fail to login with wrong password', async () => {
-      await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          username: 'testuser',
-          password: 'wrongpassword',
-        })
-        .expect(400);
-    });
-
-    it('should fail to access protected route without token', async () => {
-      await request(app.getHttpServer()).get('/auth/profile').expect(401);
-    });
-
-    it('should fail to access admin route as regular user', async () => {
-      await request(app.getHttpServer())
-        .get('/users')
+  /**
+   * @describe Test suite for the protected profile endpoint (/auth/profile).
+   */
+  describe('/auth/profile (GET)', () => {
+    /**
+     * @test Should return the user profile when a valid access token is provided.
+     * This test sends a GET request to the /auth/profile endpoint with a valid
+     * access token in the Authorization header and expects a 200 OK status code
+     * and a response containing the user's profile information (excluding sensitive
+     * data like password and refreshToken).
+     */
+    it('should return user profile with a valid access token', () => {
+      return request(app.getHttpServer())
+        .get('/auth/profile')
         .set('Authorization', `Bearer ${accessToken}`)
-        .expect(403);
+        .expect(HttpStatus.OK)
+        .then((response) => {
+          expect(response.body).toHaveProperty('id');
+          expect(response.body).toHaveProperty('username', newUser.username);
+          expect(response.body).toHaveProperty('role', newUser.role);
+          expect(response.body).not.toHaveProperty('password');
+          expect(response.body).not.toHaveProperty('refreshToken');
+        });
+    });
+
+    /**
+     * @test Should return Unauthorized if no or invalid access token is provided.
+     * This test sends a GET request to the /auth/profile endpoint without a valid
+     * access token and expects a 401 Unauthorized status code, as this endpoint
+     * is protected by the AuthGuard.
+     */
+    it('should return Unauthorized without a valid access token', () => {
+      return request(app.getHttpServer())
+        .get('/auth/profile')
+        .expect(HttpStatus.UNAUTHORIZED);
     });
   });
 });

@@ -5,10 +5,13 @@ import {
   IsOptional,
   IsIn,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
-export class AuthDto {
+export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
+  @MinLength(3, { message: 'Username must be at least 3 characters long' })
+  @Transform(({ value }) => value?.toLowerCase())
   username: string;
 
   @IsString()
@@ -18,5 +21,8 @@ export class AuthDto {
 
   @IsOptional()
   @IsIn(['user', 'admin'], { message: 'Role must be either "user" or "admin"' })
-  role: 'user' | 'admin' = 'user';
+  role?: 'user' | 'admin' = 'user';
+
+  @IsOptional()
+  refreshToken?: string | null;
 }
