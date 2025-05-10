@@ -1,168 +1,274 @@
 import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  Body,
-  NotFoundException,
   BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import {
+  CreateUserDto,
+  LoginUserDto,
+  ChangePasswordDto,
+  DeleteAccountDto,
+  TokensResponseDto,
+  UserResponseDto,
+} from '../dto';
 import { UsersService } from '../users/users.service';
-import { v4 as uuidv4 } from 'uuid';
-import { User } from '@/users/user.entity';
+import { User } from '../users/user.entity';
+
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly usersService: UsersService,
-    private readonly jwtService: JwtService,
-  ) {}
-  private deletionTokens = new Map<string, number>();
-
-  async signup(
-    username: string,
-    password: string,
-    role: 'user' | 'admin' = 'user',
+    private userService: UsersService,
+    private jwtService: JwtService,
   ) {
+    this.logger = new Logger(AuthService.name);
+  }
+
+  private readonly logger: Logger;
+
+  private toUserResponseDto(user: User): UserResponseDto {
+    const { password, refreshToken, ...userResponse } = user;
+    return userResponse;
+  }
+
+  async register(createUserDto: CreateUserDto): Promise<TokensResponseDto> {
     try {
-      const existing = await this.usersService.findOne({ username: username });
-      if (existing) {
-        throw new ConflictException('Username already taken');
+      this.logger.log(`Registering new user: ${createUserDto.username}`);
+      const user = await this.userService.create(createUserDto);
+      return this.generateTokens(user);
+    } catch (error) {
+      if (
+        error instanceof ConflictException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
       }
-    } catch {
-      const user = await this.usersService.create(username, password, role);
-      const tokens = await this.generateTokensByUserId(user.id);
-      await this.storeRefreshToken(user.id, tokens.refreshToken);
+      this.logger.error(error);
+
+      throw new InternalServerErrorException('Registration failed');
+    }
+  }
+
+  async login(loginDto: LoginUserDto): Promise<TokensResponseDto> {
+    try {
+      const { username, password } = loginDto;
+      // Find user
+      const user = await this.userService.findOneByUsername(username);
+      // Validate user and password
+      if (!user || !(await bcrypt.compare(password, user.password))) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      // Generate tokens
+      return this.generateTokens(user);
+    } catch (error) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      this.logger.error(error);
+      throw new InternalServerErrorException('Login failed');
+    }
+  }
+
+  async getProfile(userId: number): Promise<UserResponseDto> {
+    try {
+      const user = await this.userService.findOne(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      return this.toUserResponseDto(user);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(error);
+
+      throw new InternalServerErrorException('Failed to fetch profile');
+    }
+  }
+
+  async refreshTokens(authHeader: string): Promise<TokensResponseDto> {
+    try {
+      if (!authHeader?.startsWith('Bearer ')) {
+        throw new UnauthorizedException('Invalid authorization header');
+      }
+
+      const refreshToken = authHeader.split(' ')[1];
+      const payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
+
+      const user = await this.userService.findOne(payload.sub);
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Verify the refresh token matches the stored one
+      if (user.refreshToken !== refreshToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      // Generate new tokens
+      const tokens = await this.generateTokens(user);
+
+      // Clear the old refresh token
+      await this.clearRefreshToken(user.id);
+
       return tokens;
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      this.logger.error(error);
+
+      throw new InternalServerErrorException('Failed to refresh tokens');
     }
   }
 
-  async login(username: string, password: string) {
-    const user = await this.usersService.findOne({ username });
-    if (!user || user.password !== password) {
-      throw new UnauthorizedException('Invalid credentials');
+  async clearRefreshToken(userId: number): Promise<void> {
+    try {
+      const user = await this.userService.findOne(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      await this.userService.update(userId, { refreshToken: null });
+      this.logger.log(`Cleared refresh token for user ${userId}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to clear refresh token for user ${userId}: ${error.message}`,
+      );
+      this.logger.error(error);
+
+      throw new InternalServerErrorException('Failed to clear refresh token');
     }
-
-    const tokens = await this.generateTokensByUserId(user.id);
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
-
-    return tokens;
   }
 
-  async generateTokensByUserId(userId: number) {
-    const user = await this.usersService.findOne({ id: userId });
-    if (!user) throw new UnauthorizedException('User not found');
+  async changePassword(
+    userId: number,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<TokensResponseDto> {
+    try {
+      const { currentPassword, newPassword } = changePasswordDto;
 
-    const accessToken = await this.jwtService.signAsync(
-      { sub: user.id, username: user.username, role: user.role },
-      { expiresIn: '15m' },
-    );
+      const user = await this.userService.findOne(userId);
 
-    const refreshToken = await this.jwtService.signAsync(
-      { sub: user.id, username: user.username, role: user.role },
-      { expiresIn: '7d' },
+      if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+      await this.userService.update(userId, { password: hashedNewPassword });
+
+      // Clear refresh token when password is changed
+      await this.clearRefreshToken(userId);
+
+      const updatedUser = await this.userService.findOne(userId);
+      return this.generateTokens(updatedUser);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      this.logger.error(error);
+
+      throw new InternalServerErrorException('Password change failed');
+    }
+  }
+
+  async deleteAccount(
+    userId: number,
+    deleteAccountDto: DeleteAccountDto,
+  ): Promise<void> {
+    try {
+      const { password } = deleteAccountDto;
+
+      const user = await this.userService.findOne(userId);
+
+      if (!user || !(await bcrypt.compare(password, user.password))) {
+        throw new UnauthorizedException(
+          'Invalid credentials for account deletion',
+        );
+      }
+
+      await this.userService.remove(userId);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      this.logger.error(error);
+
+      throw new InternalServerErrorException('Account deletion failed');
+    }
+  }
+
+  private async generateTokens(user: User): Promise<TokensResponseDto> {
+    this.logger.log(`Generating tokens for user ${user.id}`);
+    const payload = {
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+    };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: '15m',
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: '7d',
+      }),
+    ]);
+
+    this.logger.log(
+      `Tokens generated for user ${user.id}, storing refresh token...`,
     );
+    // Store refresh token in database
+    await this.storeRefreshToken(user.id, refreshToken);
+    this.logger.log(`Refresh token stored successfully for user ${user.id}`);
 
     return { accessToken, refreshToken };
   }
 
-  async storeRefreshToken(userId: number, refreshToken: string) {
-    await this.usersService.update(userId, { refreshToken });
-  }
-
-  async verifyRefreshToken(
+  private async storeRefreshToken(
     userId: number,
     refreshToken: string,
-  ): Promise<boolean> {
-    const user = await this.usersService.findOne({ id: userId });
-    if (!user?.refreshToken) return false;
-    return user.refreshToken === refreshToken;
-  }
-
-  async updateRefreshToken(userId: number, newRefreshToken: string) {
-    await this.usersService.update(userId, { refreshToken: newRefreshToken });
-  }
-
-  async removeRefreshToken(userId: number) {
-    await this.usersService.update(userId, { refreshToken: null });
-  }
-
-  async generateDeletionToken(userId: number): Promise<string> {
-    const token = uuidv4();
-    this.deletionTokens.set(token, userId);
-
-    // auto-expire token after 5 minutes
-    setTimeout(
-      () => {
-        this.deletionTokens.delete(token);
-      },
-      5 * 60 * 1000,
-    );
-
-    return token;
-  }
-
-  validateDeletionToken(token: string): number | null {
-    return this.deletionTokens.get(token) ?? null;
-  }
-
-  invalidateDeletionToken(token: string) {
-    this.deletionTokens.delete(token);
-  }
-
-  async deleteUser(
-    userId: number,
-    password: string,
-    token: string,
-    confirmation: string,
   ): Promise<void> {
-    if (confirmation !== 'yes') {
-      throw new UnauthorizedException('Deletion not confirmed');
+    try {
+      this.logger.log(`Attempting to store refresh token for user ${userId}`);
+
+      // Update the user with the new refresh token
+      const updatedUser = await this.userService.update(userId, {
+        refreshToken,
+      });
+
+      if (!updatedUser) {
+        throw new Error('Failed to update user with refresh token');
+      }
+
+      // Verify the token was stored
+      const user = await this.userService.findOne(userId);
+
+      if (!user?.refreshToken) {
+        throw new Error('Refresh token was not stored properly');
+      }
+
+      this.logger.log(`Successfully stored refresh token for user ${userId}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to store refresh token for user ${userId}: ${error.message}`,
+      );
+      this.logger.error(error);
+
+      throw new InternalServerErrorException('Failed to store refresh token');
     }
-
-    const tokenUserId = this.validateDeletionToken(token);
-    if (tokenUserId !== userId) {
-      throw new UnauthorizedException('Invalid or expired deletion token');
-    }
-
-    const user = await this.usersService.findOne({ id: userId });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (password !== user.password) {
-      throw new UnauthorizedException('Invalid password');
-    }
-
-    await this.usersService.remove(userId);
-    this.invalidateDeletionToken(token);
-  }
-
-  async changePassword(
-    userId: number, 
-    oldPassword: string, 
-    newPassword: string
-  ): Promise<User> {
-    // Validate password requirements
-    if (newPassword.length < 8) {
-      throw new BadRequestException('Password must be at least 8 characters long');
-    }
-
-    // Find user
-    const user = await this.usersService.findOne({id:userId});
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    // Verify old password
-    if (user.password !== oldPassword) {
-      throw new BadRequestException('Current password is incorrect');    }
-
-    // Check if new password is different
-    if (oldPassword === newPassword) {
-      throw new ConflictException('New password must be different from current password');
-    }
-
-    // Update user password
-    return this.usersService.update(user.id, { password: newPassword });
   }
 }

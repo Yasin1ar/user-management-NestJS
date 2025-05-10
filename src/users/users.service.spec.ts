@@ -2,135 +2,149 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
-import { ConflictException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+import {
+  ConflictException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { CreateUserDto } from '@/dto';
 
-// Create a fresh mock for each test to avoid state leakage
-const createMockRepository = () => ({
-  find: jest.fn(),
-  findOne: jest.fn(),
-  delete: jest.fn(),
-  save: jest.fn(),
-  create: jest.fn(),
-  update: jest.fn(),
-});
+jest.mock('bcrypt');
 
 describe('UsersService', () => {
   let service: UsersService;
-  let repository: ReturnType<typeof createMockRepository>;
+  let repository: Repository<User>;
+
+  const mockUser: User = {
+    id: 1,
+    username: 'testuser',
+    password: 'hashedpassword',
+    role: 'user',
+    refreshToken: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 
   beforeEach(async () => {
-    repository = createMockRepository();
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
         {
           provide: getRepositoryToken(User),
-          useValue: repository,
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            save: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            delete: jest.fn(),
+            createQueryBuilder: jest.fn(() => ({
+              skip: jest.fn().mockReturnThis(),
+              take: jest.fn().mockReturnThis(),
+              andWhere: jest.fn().mockReturnThis(),
+              getManyAndCount: jest.fn().mockResolvedValue([[mockUser], 1]),
+            })),
+          },
         },
       ],
     }).compile();
 
     service = module.get<UsersService>(UsersService);
+    repository = module.get<Repository<User>>(getRepositoryToken(User));
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  describe('create', () => {
+    it('should create a user', async () => {
+      const createUserDto = {
+        username: 'newuser',
+        password: 'password',
+        role: 'user',
+      };
+
+      jest.spyOn(repository, 'findOne').mockResolvedValue(null);
+      jest.spyOn(repository, 'create').mockReturnValue(mockUser);
+      jest.spyOn(repository, 'save').mockResolvedValue(mockUser);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedpassword');
+
+      const result = await service.create(createUserDto as CreateUserDto);
+      expect(result).toEqual(mockUser);
+      expect(repository.create).toHaveBeenCalledWith({
+        username: 'newuser',
+        password: 'hashedpassword',
+        role: 'user',
+      });
+    });
+
+    it('should throw ConflictException if username exists', async () => {
+      jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
+      await expect(
+        service.create({ username: 'testuser', password: 'pass' }),
+      ).rejects.toThrow(ConflictException);
+    });
   });
 
   describe('findAll', () => {
-    it('should return all users', async () => {
-      const users = [{ id: 1, username: 'a', password: 'b', role: 'user' }];
-      repository.find.mockResolvedValue(users);
-
-      const result = await service.findAll();
-      expect(result).toEqual(users);
-      expect(repository.find).toHaveBeenCalled();
+    it('should return paginated users', async () => {
+      const result = await service.findAll(1, 10);
+      expect(result.data).toEqual([mockUser]);
+      expect(result.total).toBe(1);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
     });
   });
 
   describe('findOne', () => {
-    it('should find by id', async () => {
-      const user = { id: 1, username: 'a', password: 'b', role: 'user' };
-      repository.findOne.mockResolvedValue(user);
-
-      const result = await service.findOne({ id: 1 });
-      expect(result).toEqual(user);
-      expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+    it('should find user by id', async () => {
+      jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
+      const result = await service.findOne(1);
+      expect(result).toEqual(mockUser);
     });
 
-    it('should find by username', async () => {
-      const user = { id: 2, username: 'b', password: 'c', role: 'user' };
-      repository.findOne.mockResolvedValue(user);
-
-      const result = await service.findOne({ username: 'b' });
-      expect(result).toEqual(user);
-      expect(repository.findOne).toHaveBeenCalledWith({
-        where: { username: 'b' },
-      });
-    });
-
-    it('should throw if neither id nor username is provided', async () => {
-      await expect(service.findOne({})).rejects.toThrow(
-        'Either id or username must be provided',
-      );
-    });
-  });
-
-  describe('remove', () => {
-    it('should call repository.delete', async () => {
-      repository.delete.mockResolvedValue({ affected: 1 });
-      await service.remove(1);
-      expect(repository.delete).toHaveBeenCalledWith(1);
-    });
-  });
-
-  describe('create', () => {
-    it('should throw ConflictException if username exists', async () => {
-      repository.findOne.mockResolvedValue({ id: 1, username: 'taken' });
-
-      await expect(
-        service.create({ username: 'taken', password: 'pw' }),
-      ).rejects.toThrow(ConflictException);
-
-      expect(repository.findOne).toHaveBeenCalledWith({
-        where: { username: 'taken' },
-      });
-    });
-
-    it('should create and save user if username is unique', async () => {
-      const userData = {
-        username: 'unique',
-        password: 'pw',
-        role: 'user' as const,
-      };
-      const createdUser = { ...userData, id: 2 };
-      repository.findOne.mockResolvedValue(undefined);
-      repository.create.mockReturnValue(userData);
-      repository.save.mockResolvedValue(createdUser);
-
-      const result = await service.create(userData);
-      expect(repository.create).toHaveBeenCalledWith(userData);
-      expect(repository.save).toHaveBeenCalledWith(userData);
-      expect(result).toEqual(createdUser);
+    it('should throw NotFoundException if user not found', async () => {
+      jest.spyOn(repository, 'findOne').mockResolvedValue(null);
+      await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('update', () => {
-    it('should update and return the user', async () => {
-      const updatedUser = {
-        id: 1,
-        username: 'new',
-        password: 'pw',
-        role: 'user' as const,
-      };
-      repository.update.mockResolvedValue({ affected: 1 });
-      repository.findOne.mockResolvedValue(updatedUser);
+    it('should update user', async () => {
+      const updateDto = { username: 'updated' };
+      jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
+      jest
+        .spyOn(repository, 'save')
+        .mockResolvedValue({ ...mockUser, ...updateDto });
 
-      const result = await service.update(1, { username: 'new' });
-      expect(repository.update).toHaveBeenCalledWith(1, { username: 'new' });
-      expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
-      expect(result).toEqual(updatedUser);
+      const result = await service.update(1, updateDto);
+      expect(result.username).toBe('updated');
+    });
+
+    it('should hash password if provided', async () => {
+      const updateDto = { password: 'newpass' };
+      (bcrypt.hash as jest.Mock).mockResolvedValue('newhashedpass');
+      jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
+      jest.spyOn(repository, 'save').mockResolvedValue(mockUser);
+
+      await service.update(1, updateDto);
+      expect(bcrypt.hash).toHaveBeenCalledWith('newpass', 10);
+    });
+  });
+
+  describe('remove', () => {
+    it('should delete user', async () => {
+      jest
+        .spyOn(repository, 'delete')
+        .mockResolvedValue({ affected: 1 } as any);
+      await service.remove(1);
+      expect(repository.delete).toHaveBeenCalledWith(1);
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      jest
+        .spyOn(repository, 'delete')
+        .mockResolvedValue({ affected: 0 } as any);
+      await expect(service.remove(999)).rejects.toThrow(NotFoundException);
     });
   });
 });

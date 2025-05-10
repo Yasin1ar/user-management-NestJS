@@ -8,46 +8,76 @@ import {
   Patch,
   UseGuards,
   NotFoundException,
+  ParseIntPipe,
+  DefaultValuePipe,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { AuthGuard } from '../auth/guards/auth.guard';
-import { Roles } from '../auth/roles.decorator';
-import { AuthDto } from '@/auth/auth.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import {
+  CreateUserDto,
+  PaginatedUsersResponse,
+  UpdateUserDto,
+  UserResponseDto,
+} from '../dto';
 
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(RolesGuard)
 @Roles('admin')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  create(@Body() userDto: AuthDto): Promise<User> {
-    return this.usersService.create(
-      userDto.username,
-      userDto.password,
-      userDto.role,
-    );
+  async create(@Body() createUserDto: CreateUserDto): Promise<UserResponseDto> {
+    const user = await this.usersService.create(createUserDto);
+    return this.toUserResponseDto(user);
   }
 
   @Get()
-  findAll(): Promise<User[]> {
-    return this.usersService.findAll();
+  findAll(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  ): Promise<PaginatedUsersResponse> {
+    return this.usersService.findAll(page, limit);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<User | NotFoundException> {
-    return this.usersService.findOne({ id: +id });
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<UserResponseDto> {
+    const user = await this.usersService.findOne(id);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    return this.toUserResponseDto(user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string): Promise<void> {
-    return this.usersService.remove(+id);
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    try {
+      await this.usersService.remove(id);
+    } catch (error) {
+      throw error;
+    }
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() userDto: AuthDto) {
-    return this.usersService.update(+id, userDto);
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUserDto: UpdateUserDto,
+  ): Promise<UserResponseDto> {
+    const user = await this.usersService.update(id, updateUserDto);
+    return this.toUserResponseDto(user);
+  }
+
+  private toUserResponseDto(user: User): UserResponseDto {
+    return {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      createdAt: user.createdAt,
+    };
   }
 }

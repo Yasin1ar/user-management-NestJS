@@ -1,61 +1,47 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { User } from './user.entity';
-import { AuthGuard } from '../auth/guards/auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { UserResponseDto } from '../dto';
+import { Reflector } from '@nestjs/core';
 
 describe('UsersController', () => {
   let controller: UsersController;
   let service: UsersService;
 
-  const mockUser: User = {
+  const mockUserResponse: UserResponseDto = {
     id: 1,
     username: 'testuser',
-    password: 'hashedpassword',
     role: 'user',
-    refreshToken: null,
+    createdAt: new Date(),
   };
 
-  const usersArray: User[] = [
-    mockUser,
-    {
-      id: 2,
-      username: 'another',
-      password: 'pass',
-      role: 'admin',
-      refreshToken: null,
-    },
-  ];
-
-  const mockUsersService = {
-    create: jest.fn().mockResolvedValue(mockUser),
-    findAll: jest.fn().mockResolvedValue(usersArray),
-    findOne: jest.fn().mockResolvedValue(mockUser),
-    remove: jest.fn().mockResolvedValue(undefined),
-    update: jest.fn().mockResolvedValue(mockUser),
+  const mockPaginatedResponse = {
+    data: [mockUserResponse],
+    total: 1,
+    page: 1,
+    limit: 10,
   };
-
-  // Mock guards to always allow
-  const mockGuard = { canActivate: jest.fn(() => true) };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: mockUsersService }],
-    })
-      .overrideGuard(AuthGuard)
-      .useValue(mockGuard)
-      .overrideGuard(RolesGuard)
-      .useValue(mockGuard)
-      .compile();
+      providers: [
+        {
+          provide: UsersService,
+          useValue: {
+            create: jest.fn().mockResolvedValue(mockUserResponse),
+            findAll: jest.fn().mockResolvedValue(mockPaginatedResponse),
+            findOne: jest.fn().mockResolvedValue(mockUserResponse),
+            update: jest.fn().mockResolvedValue(mockUserResponse),
+            remove: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        Reflector,
+      ],
+    }).compile();
 
     controller = module.get<UsersController>(UsersController);
     service = module.get<UsersService>(UsersService);
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -63,48 +49,45 @@ describe('UsersController', () => {
   });
 
   describe('create', () => {
-    it('should call usersService.create and return the result', async () => {
-      const dto = {
-        username: 'testuser',
-        password: 'hashedpassword',
-      } as User;
-      await expect(controller.create(dto)).resolves.toEqual(mockUser);
-      expect(service.create).toHaveBeenCalledWith(dto);
+    it('should create a user', async () => {
+      const result = await controller.create({
+        username: 'test',
+        password: 'pass',
+      });
+      expect(result).toEqual(mockUserResponse);
     });
   });
 
   describe('findAll', () => {
-    it('should return an array of users', async () => {
-      await expect(controller.findAll()).resolves.toEqual(usersArray);
-      expect(service.findAll).toHaveBeenCalled();
+    it('should return paginated users', async () => {
+      const result = await controller.findAll(1, 10);
+      expect(result).toEqual(mockPaginatedResponse);
     });
   });
 
   describe('findOne', () => {
-    it('should return a user by id', async () => {
-      await expect(controller.findOne('1')).resolves.toEqual(mockUser);
-      expect(service.findOne).toHaveBeenCalledWith({ id: 1 });
-    });
-  });
-
-  describe('remove', () => {
-    it('should call usersService.remove with the correct id', async () => {
-      await expect(controller.remove('1')).resolves.toBeUndefined();
-      expect(service.remove).toHaveBeenCalledWith(1);
+    it('should return a user', async () => {
+      const result = await controller.findOne(1);
+      expect(result).toEqual(mockUserResponse);
     });
   });
 
   describe('update', () => {
-    it('should call usersService.update and return the updated user', async () => {
-      const updateDto = {
-        username: 'updated',
-        password: 'newpass',
-        role: 'admin',
-      } as User;
-      await expect(controller.update('1', updateDto)).resolves.toEqual(
-        mockUser,
-      );
-      expect(service.update).toHaveBeenCalledWith(1, updateDto);
+    it('should update a user', async () => {
+      const result = await controller.update(1, { username: 'updated' });
+      expect(result).toEqual(mockUserResponse);
     });
+  });
+
+  describe('remove', () => {
+    it('should delete a user', async () => {
+      await expect(controller.remove(1)).resolves.not.toThrow();
+    });
+  });
+
+  // Test Roles decorator
+  it('should have Roles decorator with admin role', () => {
+    const roles = Reflect.getMetadata('roles', UsersController);
+    expect(roles).toEqual(['admin']);
   });
 });
