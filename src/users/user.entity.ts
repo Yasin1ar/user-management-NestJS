@@ -23,10 +23,10 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
-  @ManyToMany(() => Role, role => role.users)
+  @ManyToMany(() => Role, (role) => role.users)
   @JoinTable()
   roles: Role[];
-  
+
   @Column({ type: 'text', nullable: true, default: null })
   refreshToken: string | null;
 

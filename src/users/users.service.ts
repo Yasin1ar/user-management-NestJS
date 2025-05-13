@@ -142,7 +142,6 @@ export class UsersService {
         user.password = await this.hashPassword(updateUserDto.password);
       }
 
-
       // Handle refresh token update
       if (updateUserDto.refreshToken !== undefined) {
         this.logger.log(`Updating refresh token for user ${id}`);

@@ -14,7 +14,8 @@ import { PermissionsGuard } from './guards/permissions.guard';
 import { APP_GUARD } from '@nestjs/core';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Role, Permission]),
+  imports: [
+    TypeOrmModule.forFeature([User, Role, Permission]),
     forwardRef(() => UsersModule),
     ThrottlerModule.forRoot([
       {
@@ -34,10 +35,14 @@ import { APP_GUARD } from '@nestjs/core';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard, {
+  providers: [
+    AuthService,
+    AuthGuard,
+    {
       provide: APP_GUARD,
       useClass: PermissionsGuard,
-    }],
+    },
+  ],
   exports: [JwtModule],
 })
 export class AuthModule {}

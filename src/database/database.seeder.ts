@@ -14,7 +14,7 @@ export class DatabaseSeeder {
 
   private async seedPermissions() {
     const permissionRepository = this.dataSource.getRepository(Permission);
-    
+
     const permissions = [
       { name: 'user_create', description: 'Create users' },
       { name: 'user_read', description: 'Read users' },
@@ -28,7 +28,9 @@ export class DatabaseSeeder {
     ];
 
     for (const permissionData of permissions) {
-      const permissionExists = await permissionRepository.findOneBy({ name: permissionData.name });
+      const permissionExists = await permissionRepository.findOneBy({
+        name: permissionData.name,
+      });
       if (!permissionExists) {
         const permission = permissionRepository.create(permissionData);
         await permissionRepository.save(permission);
@@ -41,13 +43,13 @@ export class DatabaseSeeder {
     const permissionRepository = this.dataSource.getRepository(Permission);
 
     const adminPermissions = await permissionRepository.find();
-    
+
     const adminRole = await roleRepository.findOneBy({ name: 'admin' });
     if (!adminRole) {
       const newAdminRole = roleRepository.create({
         name: 'admin',
         description: 'Administrator with full access',
-        permissions: adminPermissions
+        permissions: adminPermissions,
       });
       await roleRepository.save(newAdminRole);
     }
@@ -58,7 +60,7 @@ export class DatabaseSeeder {
   private async seedAdminUser() {
     const userRepository = this.dataSource.getRepository(User);
     const roleRepository = this.dataSource.getRepository(Role);
-    
+
     const adminRole = await roleRepository.findOneBy({ name: 'admin' });
     const adminUser = await userRepository.findOneBy({ username: 'admin' });
 
@@ -67,7 +69,7 @@ export class DatabaseSeeder {
         username: 'admin',
         password: await bcrypt.hash('admin123', 10), // In production, use a more complex password
         isActive: true,
-        roles: [adminRole]
+        roles: [adminRole],
       });
       await userRepository.save(newAdmin);
     }

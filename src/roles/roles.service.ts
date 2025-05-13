@@ -16,7 +16,7 @@ export class RolesService {
 
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
     const role = this.roleRepository.create(createRoleDto);
-    
+
     if (createRoleDto.permissionIds) {
       role.permissions = await this.permissionRepository.findByIds(
         createRoleDto.permissionIds,
@@ -31,9 +31,9 @@ export class RolesService {
   }
 
   async findOne(id: number): Promise<Role> {
-    const role = await this.roleRepository.findOne({ 
+    const role = await this.roleRepository.findOne({
       where: { id },
-      relations: ['permissions'] 
+      relations: ['permissions'],
     });
 
     if (!role) {
@@ -45,7 +45,7 @@ export class RolesService {
 
   async update(id: number, updateRoleDto: UpdateRoleDto): Promise<Role> {
     const role = await this.findOne(id);
-    
+
     if (updateRoleDto.permissionIds) {
       role.permissions = await this.permissionRepository.findByIds(
         updateRoleDto.permissionIds,

@@ -19,7 +19,7 @@ import {
   UpdateUserDto,
   UserResponseDto,
 } from '../dto';
-import {Permissions} from '../auth/decorators/permissions.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -30,7 +30,7 @@ export class UsersController {
     const user = await this.usersService.create(createUserDto);
     return this.toUserResponseDto(user);
   }
-  
+
   @Get()
   @Permissions('user_read')
   findAll(
@@ -39,7 +39,7 @@ export class UsersController {
   ): Promise<PaginatedUsersResponse> {
     return this.usersService.findAll(page, limit);
   }
-  
+
   @Get(':id')
   @Permissions('user_read')
   async findOne(
@@ -51,7 +51,7 @@ export class UsersController {
     }
     return this.toUserResponseDto(user);
   }
-  
+
   @Delete(':id')
   @Permissions('user_delete')
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
@@ -61,7 +61,7 @@ export class UsersController {
       throw error;
     }
   }
-  
+
   @Patch(':id')
   @Permissions('user_update')
   async update(

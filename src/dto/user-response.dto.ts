@@ -15,6 +15,6 @@ export class UserResponseDto {
   updatedAt?: Date;
 
   @Expose()
-  @Type(() => RoleResponseDto) 
+  @Type(() => RoleResponseDto)
   roles?: RoleResponseDto[]; // Include roles in response
 }

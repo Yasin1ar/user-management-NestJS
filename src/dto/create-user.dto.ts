@@ -19,7 +19,7 @@ export class CreateUserDto {
   @IsNotEmpty()
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   password: string;
-  
+
   @IsOptional()
   @IsArray()
   roleIds?: number[]; // For assigning roles during user creation
