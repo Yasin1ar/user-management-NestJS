@@ -37,7 +37,7 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const { username, password, role } = createUserDto;
+    const { username, password } = createUserDto;
 
     // Check if user already exists (case-insensitive)
     const existingUser = await this.userRepository.findOne({
@@ -52,7 +52,6 @@ export class UsersService {
       const newUser = this.userRepository.create({
         username: username.toLowerCase(),
         password: hashedPassword,
-        role: role,
       });
 
       return await this.userRepository.save(newUser);
@@ -141,10 +140,6 @@ export class UsersService {
 
       if (updateUserDto.password) {
         user.password = await this.hashPassword(updateUserDto.password);
-      }
-
-      if (updateUserDto.role) {
-        user.role = updateUserDto.role;
       }
 
       // Handle refresh token update

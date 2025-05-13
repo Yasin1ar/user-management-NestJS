@@ -6,7 +6,6 @@ import {
   Param,
   Delete,
   Patch,
-  UseGuards,
   NotFoundException,
   ParseIntPipe,
   DefaultValuePipe,
@@ -14,28 +13,26 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import {
   CreateUserDto,
   PaginatedUsersResponse,
   UpdateUserDto,
   UserResponseDto,
 } from '../dto';
-
-@UseGuards(RolesGuard)
-@Roles('admin')
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
+  @Permissions('user_create')
   async create(@Body() createUserDto: CreateUserDto): Promise<UserResponseDto> {
     const user = await this.usersService.create(createUserDto);
     return this.toUserResponseDto(user);
   }
 
   @Get()
+  @Permissions('user_read')
   findAll(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -44,6 +41,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @Permissions('user_read')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<UserResponseDto> {
@@ -55,6 +53,7 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @Permissions('user_delete')
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     try {
       await this.usersService.remove(id);
@@ -64,6 +63,7 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @Permissions('user_update')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
@@ -76,7 +76,6 @@ export class UsersController {
     return {
       id: user.id,
       username: user.username,
-      role: user.role,
       createdAt: user.createdAt,
     };
   }
