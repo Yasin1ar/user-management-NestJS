@@ -8,9 +8,6 @@ export class UserResponseDto {
   username: string;
 
   @Expose()
-  role: 'user' | 'admin';
-
-  @Expose()
   createdAt: Date;
 
   @Expose()
