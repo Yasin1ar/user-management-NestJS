@@ -7,9 +7,9 @@ import { forwardRef, Module } from '@nestjs/common';
 import { UsersModule } from '../users/users.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Permission } from '@/users/permission.entity';
-import { Role } from '@/users/role.entity';
-import { User } from '@/users/user.entity';
+import { Permission } from '../users/permission.entity';
+import { Role } from '../users/role.entity';
+import { User } from '../users/user.entity';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { APP_GUARD } from '@nestjs/core';
 
