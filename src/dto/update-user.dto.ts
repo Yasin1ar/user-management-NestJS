@@ -1,4 +1,10 @@
-import { IsString, IsOptional, MinLength, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  MinLength,
+  IsIn,
+  IsArray,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -12,8 +18,8 @@ export class UpdateUserDto {
   password?: string;
 
   @IsOptional()
-  @IsIn(['user', 'admin'], { message: 'Role must be either "user" or "admin"' })
-  role?: 'user' | 'admin';
+  @IsArray()
+  roleIds?: number[]; // For updating user roles
 
   @IsOptional()
   refreshToken?: string | null;

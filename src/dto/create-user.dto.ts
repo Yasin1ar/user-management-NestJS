@@ -4,6 +4,7 @@ import {
   MinLength,
   IsOptional,
   IsIn,
+  IsArray,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -20,8 +21,8 @@ export class CreateUserDto {
   password: string;
 
   @IsOptional()
-  @IsIn(['user', 'admin'], { message: 'Role must be either "user" or "admin"' })
-  role?: 'user' | 'admin' = 'user';
+  @IsArray()
+  roleIds?: number[]; // For assigning roles during user creation
 
   @IsOptional()
   refreshToken?: string | null;

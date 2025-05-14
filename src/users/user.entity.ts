@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
+import { Role } from './role.entity';
 
 @Entity()
 export class User {
@@ -17,12 +20,12 @@ export class User {
   @Column({ nullable: false, length: 255 })
   password: string;
 
-  @Column({
-    type: 'enum',
-    enum: ['user', 'admin'],
-    default: 'user',
-  })
-  role: 'user' | 'admin';
+  @Column({ default: true })
+  isActive: boolean;
+
+  @ManyToMany(() => Role, (role) => role.users)
+  @JoinTable()
+  roles: Role[];
 
   @Column({ type: 'text', nullable: true, default: null })
   refreshToken: string | null;

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnApplicationBootstrap } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -7,6 +7,9 @@ import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { AuthGuard } from './auth/guards/auth.guard';
 import { APP_GUARD } from '@nestjs/core';
+import { RolesModule } from './roles/roles.module';
+import { DataSource } from 'typeorm';
+import { DatabaseSeeder } from './database/database.seeder';
 
 @Module({
   imports: [
@@ -25,6 +28,7 @@ import { APP_GUARD } from '@nestjs/core';
     }),
     UsersModule,
     AuthModule,
+    RolesModule,
   ],
   controllers: [AppController],
   providers: [
@@ -35,4 +39,11 @@ import { APP_GUARD } from '@nestjs/core';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements OnApplicationBootstrap {
+  constructor(private dataSource: DataSource) {}
+
+  async onApplicationBootstrap() {
+    const seeder = new DatabaseSeeder(this.dataSource);
+    await seeder.seed();
+  }
+}
