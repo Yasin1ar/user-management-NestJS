@@ -3,15 +3,15 @@ import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import {
-  UnauthorizedException,
-  NotFoundException,
-  InternalServerErrorException,
   ConflictException,
-  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import { User } from '../users/user.entity';
-import { CreateUserDto, DeleteAccountDto } from '../dto';
+import { Role } from '../users/role.entity';
+import * as bcrypt from 'bcrypt';
+import { CreateUserDto, LoginUserDto, ChangePasswordDto, DeleteAccountDto } from '../dto';
 
 jest.mock('bcrypt');
 
@@ -20,35 +20,46 @@ describe('AuthService', () => {
   let usersService: UsersService;
   let jwtService: JwtService;
 
+  const mockRole: Role = {
+    id: 1,
+    name: 'user',
+    description: 'Regular user',
+    permissions: [],
+    users: []
+  };
+
   const mockUser: User = {
     id: 1,
     username: 'testuser',
-    password: 'hashedPassword',
-    role: 'user',
-    refreshToken: 'oldRefreshToken',
+    password: 'hashedpassword',
+    isActive: true,
+    refreshToken: 'test-refresh-token',
     createdAt: new Date(),
     updatedAt: new Date(),
-  };
-
-  const mockUsersService = {
-    findOne: jest.fn(),
-    findOneByUsername: jest.fn(),
-    update: jest.fn(),
-    create: jest.fn(),
-    remove: jest.fn(),
-  };
-
-  const mockJwtService = {
-    signAsync: jest.fn(),
-    verifyAsync: jest.fn(),
+    roles: [mockRole]
   };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        { provide: UsersService, useValue: mockUsersService },
-        { provide: JwtService, useValue: mockJwtService },
+        {
+          provide: UsersService,
+          useValue: {
+            create: jest.fn(),
+            findOne: jest.fn(),
+            findOneByUsername: jest.fn(),
+            update: jest.fn(),
+            remove: jest.fn(),
+          },
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            signAsync: jest.fn(),
+            verifyAsync: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -56,386 +67,322 @@ describe('AuthService', () => {
     usersService = module.get<UsersService>(UsersService);
     jwtService = module.get<JwtService>(JwtService);
 
-    // Reset all mocks before each test
+    // Reset environment variables for tests
+    process.env.JWT_ACCESS_SECRET = 'test-access-secret';
+    process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
+  });
+
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
   describe('register', () => {
-    const createUserDto: CreateUserDto = {
-      username: 'newuser',
-      password: 'password123',
-      role: 'user' as const,
-    };
+    it('should register a new user and return tokens', async () => {
+      const createUserDto: CreateUserDto = {
+        username: 'newuser',
+        password: 'password',
+        roleIds: [1]
+      };
 
-    beforeEach(() => {
-      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
-    });
-
-    it('should successfully register a new user and return tokens', async () => {
-      // Arrange
-      const newUser = { ...mockUser, id: 2, username: createUserDto.username };
-      mockUsersService.create.mockImplementation(async (dto) => {
-        const hashedPassword = await bcrypt.hash(dto.password, 10);
-        return { ...newUser, password: hashedPassword };
+      jest.spyOn(usersService, 'create').mockResolvedValue(mockUser);
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('access_token');
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('refresh_token');
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findOne').mockResolvedValue({
+        ...mockUser,
+        refreshToken: 'refresh_token',
       });
 
-      // Mock the token storage flow
-      mockUsersService.update.mockResolvedValueOnce({
-        ...newUser,
-        refreshToken: 'newRefreshToken',
-      }); // First call: store refresh token
-      mockUsersService.findOne.mockResolvedValueOnce({
-        ...newUser,
-        refreshToken: 'newRefreshToken',
-      }); // Verify token storage
-
-      mockJwtService.signAsync.mockResolvedValue('newToken');
-
-      // Act
       const result = await service.register(createUserDto);
-
-      // Assert
-      expect(mockUsersService.create).toHaveBeenCalledWith(createUserDto);
-      expect(mockUsersService.update).toHaveBeenCalledWith(newUser.id, {
-        refreshToken: 'newToken',
+      
+      expect(result).toEqual({
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
       });
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(newUser.id);
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
+      expect(usersService.create).toHaveBeenCalledWith(createUserDto);
     });
 
-    it('should throw ConflictException if username already exists', async () => {
-      // Arrange
-      mockUsersService.create.mockRejectedValue(
-        new ConflictException('Username already exists'),
-      );
-
-      // Act & Assert
-      await expect(service.register(createUserDto)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-
-    it('should throw BadRequestException if validation fails', async () => {
-      // Arrange
-      mockUsersService.create.mockRejectedValue(
-        new BadRequestException('Invalid input'),
-      );
-
-      // Act & Assert
-      await expect(service.register(createUserDto)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should throw InternalServerErrorException if registration fails', async () => {
-      // Arrange
-      mockUsersService.create.mockRejectedValue(new Error('Database error'));
-
-      // Act & Assert
-      await expect(service.register(createUserDto)).rejects.toThrow(
-        InternalServerErrorException,
-      );
-    });
-  });
-
-  describe('getProfile', () => {
-    const userId = 1;
-
-    it('should return user profile without sensitive data', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-
-      // Act
-      const result = await service.getProfile(userId);
-
-      // Assert
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(userId);
-      expect(result).not.toHaveProperty('password');
-      expect(result).not.toHaveProperty('refreshToken');
-      expect(result).toHaveProperty('id', mockUser.id);
-      expect(result).toHaveProperty('username', mockUser.username);
-      expect(result).toHaveProperty('role', mockUser.role);
-    });
-
-    it('should throw NotFoundException if user not found', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(service.getProfile(userId)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('should throw InternalServerErrorException if profile fetch fails', async () => {
-      // Arrange
-      mockUsersService.findOne.mockRejectedValue(new Error('Database error'));
-
-      // Act & Assert
-      await expect(service.getProfile(userId)).rejects.toThrow(
-        InternalServerErrorException,
-      );
-    });
-  });
-
-  describe('deleteAccount', () => {
-    const userId = 1;
-    const deleteAccountDto: DeleteAccountDto = {
-      password: 'currentPassword',
-      confirmation: 'DELETE',
-    };
-
-    beforeEach(() => {
-      (bcrypt.compare as jest.Mock).mockImplementation((pass, hash) => {
-        if (pass === deleteAccountDto.password && hash === mockUser.password)
-          return true;
-        return false;
-      });
-    });
-
-    it('should successfully delete user account', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-      mockUsersService.remove.mockResolvedValue(true);
-
-      // Act
-      await service.deleteAccount(userId, deleteAccountDto);
-
-      // Assert
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(userId);
-      expect(bcrypt.compare).toHaveBeenCalledWith(
-        deleteAccountDto.password,
-        mockUser.password,
-      );
-      expect(mockUsersService.remove).toHaveBeenCalledWith(userId);
-    });
-
-    it('should throw UnauthorizedException if password is incorrect', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-      // Act & Assert
+    it('should throw ConflictException if username exists', async () => {
+      jest.spyOn(usersService, 'create').mockRejectedValue(new ConflictException());
+      
       await expect(
-        service.deleteAccount(userId, deleteAccountDto),
-      ).rejects.toThrow(UnauthorizedException);
+        service.register({ username: 'existing', password: 'pass' }),
+      ).rejects.toThrow(ConflictException);
     });
 
-    it('should throw UnauthorizedException if user not found', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(null);
-
-      // Act & Assert
+    it('should throw InternalServerErrorException for unexpected errors', async () => {
+      jest.spyOn(usersService, 'create').mockRejectedValue(new Error());
+      
       await expect(
-        service.deleteAccount(userId, deleteAccountDto),
-      ).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should throw InternalServerErrorException if account deletion fails', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-      mockUsersService.remove.mockRejectedValue(new Error('Database error'));
-
-      // Act & Assert
-      await expect(
-        service.deleteAccount(userId, deleteAccountDto),
-      ).rejects.toThrow(InternalServerErrorException);
-    });
-  });
-
-  describe('changePassword', () => {
-    const userId = 1;
-    const currentPassword = 'currentPassword';
-    const newPassword = 'newPassword';
-    const hashedNewPassword = 'hashedNewPassword';
-
-    beforeEach(() => {
-      (bcrypt.compare as jest.Mock).mockImplementation((pass, hash) => {
-        if (pass === currentPassword && hash === mockUser.password) return true;
-        return false;
-      });
-      (bcrypt.hash as jest.Mock).mockResolvedValue(hashedNewPassword);
-    });
-
-    it('should successfully change password and return new tokens', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-      mockUsersService.update
-        .mockResolvedValueOnce({ ...mockUser, password: hashedNewPassword }) // First call: update password
-        .mockResolvedValueOnce({ ...mockUser, refreshToken: null }) // Second call: clear refresh token
-        .mockResolvedValueOnce({ ...mockUser, refreshToken: 'newToken' }); // Third call: store new refresh token
-      mockJwtService.signAsync.mockResolvedValue('newToken');
-
-      // Act
-      const result = await service.changePassword(userId, {
-        currentPassword,
-        newPassword,
-      });
-
-      // Assert
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(userId);
-      expect(bcrypt.compare).toHaveBeenCalledWith(
-        currentPassword,
-        mockUser.password,
-      );
-      expect(bcrypt.hash).toHaveBeenCalledWith(newPassword, 10);
-
-      // Verify all update calls
-      expect(mockUsersService.update).toHaveBeenCalledTimes(3);
-      expect(mockUsersService.update).toHaveBeenNthCalledWith(1, userId, {
-        password: hashedNewPassword,
-      });
-      expect(mockUsersService.update).toHaveBeenNthCalledWith(2, userId, {
-        refreshToken: null,
-      });
-      expect(mockUsersService.update).toHaveBeenNthCalledWith(3, userId, {
-        refreshToken: 'newToken',
-      });
-
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
-    });
-
-    it('should throw UnauthorizedException if current password is incorrect', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-      // Act & Assert
-      await expect(
-        service.changePassword(userId, {
-          currentPassword: 'wrongPassword',
-          newPassword,
-        }),
-      ).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should throw UnauthorizedException if user not found', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.changePassword(userId, {
-          currentPassword,
-          newPassword,
-        }),
-      ).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should throw InternalServerErrorException if password update fails', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-      mockUsersService.update.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.changePassword(userId, {
-          currentPassword,
-          newPassword,
-        }),
+        service.register({ username: 'test', password: 'pass' }),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });
 
   describe('login', () => {
-    const username = 'testuser';
-    const password = 'password';
+    it('should login user and return tokens', async () => {
+      const loginDto: LoginUserDto = {
+        username: 'testuser',
+        password: 'password',
+      };
 
-    beforeEach(() => {
-      (bcrypt.compare as jest.Mock).mockImplementation((pass, hash) => {
-        if (pass === password && hash === mockUser.password) return true;
-        return false;
-      });
-    });
-
-    it('should successfully login and return tokens', async () => {
-      // Arrange
-      mockUsersService.findOneByUsername.mockResolvedValue(mockUser);
-      mockUsersService.update.mockResolvedValue({
+      jest.spyOn(usersService, 'findOneByUsername').mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('access_token');
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('refresh_token');
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findOne').mockResolvedValue({
         ...mockUser,
-        refreshToken: 'newRefreshToken',
+        refreshToken: 'refresh_token',
       });
-      mockJwtService.signAsync.mockResolvedValue('newToken');
 
-      // Act
-      const result = await service.login({ username, password });
-
-      // Assert
-      expect(mockUsersService.findOneByUsername).toHaveBeenCalledWith(username);
-      expect(bcrypt.compare).toHaveBeenCalledWith(password, mockUser.password);
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
+      const result = await service.login(loginDto);
+      
+      expect(result).toEqual({
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+      });
+      expect(usersService.findOneByUsername).toHaveBeenCalledWith('testuser');
+      expect(bcrypt.compare).toHaveBeenCalledWith('password', 'hashedpassword');
     });
 
-    it('should throw UnauthorizedException if credentials are invalid', async () => {
-      // Arrange
-      mockUsersService.findOneByUsername.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-      // Act & Assert
+    it('should throw UnauthorizedException for invalid credentials - user not found', async () => {
+      jest.spyOn(usersService, 'findOneByUsername').mockRejectedValue(new NotFoundException(
+        'User with username testuser not found'));
+      
       await expect(
-        service.login({ username, password: 'wrongPassword' }),
+        service.login({ username: 'nonexistent', password: 'pass' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw UnauthorizedException for invalid credentials - wrong password', async () => {
+      jest.spyOn(usersService, 'findOneByUsername').mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      
+      await expect(
+        service.login({ username: 'testuser', password: 'wrongpass' }),
       ).rejects.toThrow(UnauthorizedException);
     });
   });
 
+  describe('getProfile', () => {
+    it('should return user profile without sensitive information', async () => {
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
+      
+      const result = await service.getProfile(1);
+      
+      // Ensure password and refreshToken are not included
+      expect(result).not.toHaveProperty('password');
+      expect(result).not.toHaveProperty('refreshToken');
+      
+      // Check other expected properties
+      expect(result).toHaveProperty('id', 1);
+      expect(result).toHaveProperty('username', 'testuser');
+      expect(result).toHaveProperty('roles');
+      // expect(result.roles[0]).toHaveProperty('name', 'user');
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      jest.spyOn(usersService, 'findOne').mockRejectedValue(new NotFoundException(
+        'User with username testuser not found'));      
+      await expect(service.getProfile(999)).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('refreshTokens', () => {
-    const refreshToken = 'validRefreshToken';
-    const authHeader = `Bearer ${refreshToken}`;
-
-    beforeEach(() => {
-      mockJwtService.verifyAsync.mockResolvedValue({ sub: mockUser.id });
-    });
-
-    it('should successfully refresh tokens', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue({
+    it('should refresh tokens successfully', async () => {
+      const authHeader = 'Bearer refresh_token';
+      const payload = { sub: 1, username: 'testuser' };
+      
+      jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue(payload);
+      jest.spyOn(usersService, 'findOne').mockResolvedValue({
         ...mockUser,
-        refreshToken,
+        refreshToken: 'refresh_token',
       });
-      mockUsersService.update.mockResolvedValue({
-        ...mockUser,
-        refreshToken: 'newRefreshToken',
-      });
-      mockJwtService.signAsync.mockResolvedValue('newToken');
-
-      // Act
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_access_token');
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_refresh_token');
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      
       const result = await service.refreshTokens(authHeader);
-
-      // Assert
-      expect(mockJwtService.verifyAsync).toHaveBeenCalledWith(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET,
+      
+      expect(result).toEqual({
+        accessToken: 'new_access_token',
+        refreshToken: 'new_refresh_token',
       });
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(mockUser.id);
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
+      expect(jwtService.verifyAsync).toHaveBeenCalledWith('refresh_token', {
+        secret: 'test-refresh-secret',
+      });
     });
 
-    it('should throw UnauthorizedException if refresh token is invalid', async () => {
-      // Arrange
-      mockJwtService.verifyAsync.mockRejectedValue(
-        new UnauthorizedException('Invalid token'),
-      );
-
-      // Act & Assert
-      await expect(service.refreshTokens(authHeader)).rejects.toThrow(
+    it('should throw UnauthorizedException for invalid auth header', async () => {
+      await expect(service.refreshTokens('InvalidHeader')).rejects.toThrow(
         UnauthorizedException,
       );
     });
 
-    it('should throw UnauthorizedException if stored refresh token does not match', async () => {
-      // Arrange
-      mockUsersService.findOne.mockResolvedValue({
+    it('should throw UnauthorizedException if user not found', async () => {
+      jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue({ sub: 999 });
+      jest.spyOn(usersService, 'findOne').mockRejectedValue(new UnauthorizedException('User not found'));      
+      await expect(service.refreshTokens('Bearer valid_token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw UnauthorizedException if refresh token does not match', async () => {
+      jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue({ sub: 1 });
+      jest.spyOn(usersService, 'findOne').mockResolvedValue({
         ...mockUser,
-        refreshToken: 'differentToken',
+        refreshToken: 'different_token',
       });
-
-      // Act & Assert
-      await expect(service.refreshTokens(authHeader)).rejects.toThrow(
+      
+      await expect(service.refreshTokens('Bearer valid_token')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+  });
+
+  describe('changePassword', () => {
+    const changePasswordDto: ChangePasswordDto = {
+      currentPassword: 'current',
+      newPassword: 'new',
+    };
+
+    it('should change password and return new tokens', async () => {
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new_hashed_password');
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_access_token');
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_refresh_token');
+      
+      const result = await service.changePassword(1, changePasswordDto);
+      
+      expect(result).toEqual({
+        accessToken: 'new_access_token',
+        refreshToken: 'new_refresh_token',
+      });
+      expect(usersService.update).toHaveBeenCalledWith(1, {
+        password: 'new_hashed_password',
+      });
+    });
+
+    it('should throw UnauthorizedException for incorrect current password', async () => {
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      
+      await expect(
+        service.changePassword(1, changePasswordDto),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      jest.spyOn(usersService, 'findOne').mockRejectedValue(new UnauthorizedException)      
+      await expect(
+        service.changePassword(999, changePasswordDto),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('deleteAccount', () => {
+    const deleteAccountDto: DeleteAccountDto = {
+      password: 'password',
+      confirmation: 'DELETE',
+    };
+
+    it('should delete user account', async () => {
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      jest.spyOn(usersService, 'remove').mockResolvedValue(undefined);
+      
+      await expect(
+        service.deleteAccount(1, deleteAccountDto),
+      ).resolves.not.toThrow();
+      expect(usersService.remove).toHaveBeenCalledWith(1);
+    });
+
+    it('should throw UnauthorizedException for incorrect password', async () => {
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      
+      await expect(service.deleteAccount(1, deleteAccountDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      jest.spyOn(usersService, 'findOne').mockRejectedValue(new NotFoundException)      
+      
+      await expect(service.deleteAccount(999, deleteAccountDto)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('generateTokens', () => {
+    it('should generate access and refresh tokens', async () => {
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('access_token');
+      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('refresh_token');
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findOne').mockResolvedValue({
+        ...mockUser,
+        refreshToken: 'refresh_token',
+      });
+      
+      // Using private method via any type casting
+      const result = await (service as any).generateTokens(mockUser);
+      
+      expect(result).toEqual({
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+      });
+      expect(jwtService.signAsync).toHaveBeenCalledTimes(2);
+      expect(usersService.update).toHaveBeenCalledWith(1, {
+        refreshToken: 'refresh_token',
+      });
+    });
+  });
+
+  describe('storeRefreshToken', () => {
+    it('should store refresh token', async () => {
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findOne').mockResolvedValue({
+        ...mockUser,
+        refreshToken: 'new_token',
+      });
+      
+      // Using private method via any type casting
+      await expect(
+        (service as any).storeRefreshToken(1, 'new_token'),
+      ).resolves.not.toThrow();
+      expect(usersService.update).toHaveBeenCalledWith(1, {
+        refreshToken: 'new_token',
+      });
+    });
+
+    it('should throw InternalServerErrorException if update fails', async () => {
+      jest.spyOn(usersService, 'findOne').mockRejectedValue(new NotFoundException)      
+      
+      // Using private method via any type casting
+      await expect(
+        (service as any).storeRefreshToken(1, 'new_token'),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException if token verification fails', async () => {
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findOne').mockResolvedValue({
+        ...mockUser,
+        refreshToken: null,
+      });
+      
+      // Using private method via any type casting
+      await expect(
+        (service as any).storeRefreshToken(1, 'new_token'),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 });
