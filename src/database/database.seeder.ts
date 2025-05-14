@@ -68,7 +68,6 @@ export class DatabaseSeeder {
       const newAdmin = userRepository.create({
         username: 'admin',
         password: await bcrypt.hash('admin123', 10), // In production, use a more complex password
-        isActive: true,
         roles: [adminRole],
       });
       await userRepository.save(newAdmin);

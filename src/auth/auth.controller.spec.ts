@@ -17,11 +17,20 @@ describe('AuthController', () => {
     refreshToken: 'refresh_token',
   };
 
+  const mockRole = {
+    id: 1,
+    name: 'user',
+    description: 'Regular user',
+    permissions: [],
+    users: [],
+  };
+
   const mockUserResponse: UserResponseDto = {
     id: 1,
     username: 'testuser',
-    role: 'user',
+    roles: [mockRole],
     createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
   beforeEach(async () => {
@@ -56,7 +65,7 @@ describe('AuthController', () => {
       const result = await controller.register({
         username: 'newuser',
         password: 'password',
-        role: 'user',
+        roleIds: [1],
       });
       expect(result).toEqual(mockTokens);
       expect(authService.register).toHaveBeenCalled();

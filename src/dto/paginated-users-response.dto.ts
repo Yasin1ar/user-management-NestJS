@@ -1,17 +1,28 @@
-import { Expose, Type } from 'class-transformer';
-import { UserResponseDto } from './user-response.dto';
+import { ApiProperty } from '@nestjs/swagger';
+import { UserResponseDto } from '../dto';
 
 export class PaginatedUsersResponse {
-  @Expose()
+  @ApiProperty({
+    type: [UserResponseDto],
+    description: 'Array of user objects',
+  })
+  data: UserResponseDto[];
+
+  @ApiProperty({
+    example: 100,
+    description: 'Total number of users matching the query',
+  })
   total: number;
 
-  @Expose()
+  @ApiProperty({
+    example: 1,
+    description: 'Current page number',
+  })
   page: number;
 
-  @Expose()
+  @ApiProperty({
+    example: 10,
+    description: 'Number of items per page',
+  })
   limit: number;
-
-  @Expose()
-  @Type(() => UserResponseDto)
-  data: UserResponseDto[];
 }

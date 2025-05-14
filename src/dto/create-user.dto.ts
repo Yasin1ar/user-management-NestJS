@@ -1,29 +1,37 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsNotEmpty,
   MinLength,
-  IsOptional,
-  IsIn,
   IsArray,
+  IsOptional,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
 
 export class CreateUserDto {
+  @ApiProperty({
+    description: 'Username for the new user',
+    example: 'johndoe',
+  })
   @IsString()
   @IsNotEmpty()
-  @MinLength(3, { message: 'Username must be at least 3 characters long' })
-  @Transform(({ value }) => value?.toLowerCase())
   username: string;
 
+  @ApiProperty({
+    description: 'Password for the new user',
+    example: 'StrongPassword123!',
+    minLength: 6,
+  })
   @IsString()
   @IsNotEmpty()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MinLength(6)
   password: string;
 
-  @IsOptional()
+  @ApiPropertyOptional({
+    description: 'Array of role IDs to assign to the user',
+    example: [1], // Basic user role ID
+    isArray: true,
+  })
   @IsArray()
-  roleIds?: number[]; // For assigning roles during user creation
-
   @IsOptional()
-  refreshToken?: string | null;
+  roleIds?: number[];
 }
