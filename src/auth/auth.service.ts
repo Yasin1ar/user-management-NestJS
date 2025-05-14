@@ -192,7 +192,7 @@ export class AuthService {
 
       const user = await this.userService.findOne(userId);
 
-      if (! await bcrypt.compare(password, user.password)) {
+      if (!(await bcrypt.compare(password, user.password))) {
         throw new UnauthorizedException(
           'Invalid credentials for account deletion',
         );
@@ -202,10 +202,8 @@ export class AuthService {
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
-      
       } else if (error instanceof NotFoundException) {
         throw error;
-
       } else {
         this.logger.error(error);
         throw new InternalServerErrorException('Account deletion failed');

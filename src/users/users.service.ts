@@ -116,7 +116,7 @@ export class UsersService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.findOne(id);
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
@@ -127,7 +127,9 @@ export class UsersService {
         updateUserDto.username &&
         updateUserDto.username.toLowerCase() !== user.username
       ) {
-        const existingUser = await this.findOneByUsername(updateUserDto.username);
+        const existingUser = await this.findOneByUsername(
+          updateUserDto.username,
+        );
         if (existingUser) {
           throw new ConflictException('Username already exists');
         }

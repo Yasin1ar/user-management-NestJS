@@ -11,7 +11,12 @@ import {
 import { User } from '../users/user.entity';
 import { Role } from '../users/role.entity';
 import * as bcrypt from 'bcrypt';
-import { CreateUserDto, LoginUserDto, ChangePasswordDto, DeleteAccountDto } from '../dto';
+import {
+  CreateUserDto,
+  LoginUserDto,
+  ChangePasswordDto,
+  DeleteAccountDto,
+} from '../dto';
 
 jest.mock('bcrypt');
 
@@ -25,18 +30,17 @@ describe('AuthService', () => {
     name: 'user',
     description: 'Regular user',
     permissions: [],
-    users: []
+    users: [],
   };
 
   const mockUser: User = {
     id: 1,
     username: 'testuser',
     password: 'hashedpassword',
-    isActive: true,
     refreshToken: 'test-refresh-token',
     createdAt: new Date(),
     updatedAt: new Date(),
-    roles: [mockRole]
+    roles: [mockRole],
   };
 
   beforeEach(async () => {
@@ -85,12 +89,14 @@ describe('AuthService', () => {
       const createUserDto: CreateUserDto = {
         username: 'newuser',
         password: 'password',
-        roleIds: [1]
+        roleIds: [1],
       };
 
       jest.spyOn(usersService, 'create').mockResolvedValue(mockUser);
       jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('access_token');
-      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('refresh_token');
+      jest
+        .spyOn(jwtService, 'signAsync')
+        .mockResolvedValueOnce('refresh_token');
       jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'findOne').mockResolvedValue({
         ...mockUser,
@@ -98,7 +104,7 @@ describe('AuthService', () => {
       });
 
       const result = await service.register(createUserDto);
-      
+
       expect(result).toEqual({
         accessToken: 'access_token',
         refreshToken: 'refresh_token',
@@ -107,8 +113,10 @@ describe('AuthService', () => {
     });
 
     it('should throw ConflictException if username exists', async () => {
-      jest.spyOn(usersService, 'create').mockRejectedValue(new ConflictException());
-      
+      jest
+        .spyOn(usersService, 'create')
+        .mockRejectedValue(new ConflictException());
+
       await expect(
         service.register({ username: 'existing', password: 'pass' }),
       ).rejects.toThrow(ConflictException);
@@ -116,7 +124,7 @@ describe('AuthService', () => {
 
     it('should throw InternalServerErrorException for unexpected errors', async () => {
       jest.spyOn(usersService, 'create').mockRejectedValue(new Error());
-      
+
       await expect(
         service.register({ username: 'test', password: 'pass' }),
       ).rejects.toThrow(InternalServerErrorException);
@@ -133,7 +141,9 @@ describe('AuthService', () => {
       jest.spyOn(usersService, 'findOneByUsername').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('access_token');
-      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('refresh_token');
+      jest
+        .spyOn(jwtService, 'signAsync')
+        .mockResolvedValueOnce('refresh_token');
       jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'findOne').mockResolvedValue({
         ...mockUser,
@@ -141,7 +151,7 @@ describe('AuthService', () => {
       });
 
       const result = await service.login(loginDto);
-      
+
       expect(result).toEqual({
         accessToken: 'access_token',
         refreshToken: 'refresh_token',
@@ -151,9 +161,12 @@ describe('AuthService', () => {
     });
 
     it('should throw UnauthorizedException for invalid credentials - user not found', async () => {
-      jest.spyOn(usersService, 'findOneByUsername').mockRejectedValue(new NotFoundException(
-        'User with username testuser not found'));
-      
+      jest
+        .spyOn(usersService, 'findOneByUsername')
+        .mockRejectedValue(
+          new NotFoundException('User with username testuser not found'),
+        );
+
       await expect(
         service.login({ username: 'nonexistent', password: 'pass' }),
       ).rejects.toThrow(NotFoundException);
@@ -162,7 +175,7 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException for invalid credentials - wrong password', async () => {
       jest.spyOn(usersService, 'findOneByUsername').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-      
+
       await expect(
         service.login({ username: 'testuser', password: 'wrongpass' }),
       ).rejects.toThrow(UnauthorizedException);
@@ -172,13 +185,13 @@ describe('AuthService', () => {
   describe('getProfile', () => {
     it('should return user profile without sensitive information', async () => {
       jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
-      
+
       const result = await service.getProfile(1);
-      
+
       // Ensure password and refreshToken are not included
       expect(result).not.toHaveProperty('password');
       expect(result).not.toHaveProperty('refreshToken');
-      
+
       // Check other expected properties
       expect(result).toHaveProperty('id', 1);
       expect(result).toHaveProperty('username', 'testuser');
@@ -187,8 +200,11 @@ describe('AuthService', () => {
     });
 
     it('should throw NotFoundException if user not found', async () => {
-      jest.spyOn(usersService, 'findOne').mockRejectedValue(new NotFoundException(
-        'User with username testuser not found'));      
+      jest
+        .spyOn(usersService, 'findOne')
+        .mockRejectedValue(
+          new NotFoundException('User with username testuser not found'),
+        );
       await expect(service.getProfile(999)).rejects.toThrow(NotFoundException);
     });
   });
@@ -197,18 +213,22 @@ describe('AuthService', () => {
     it('should refresh tokens successfully', async () => {
       const authHeader = 'Bearer refresh_token';
       const payload = { sub: 1, username: 'testuser' };
-      
+
       jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue(payload);
       jest.spyOn(usersService, 'findOne').mockResolvedValue({
         ...mockUser,
         refreshToken: 'refresh_token',
       });
-      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_access_token');
-      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_refresh_token');
+      jest
+        .spyOn(jwtService, 'signAsync')
+        .mockResolvedValueOnce('new_access_token');
+      jest
+        .spyOn(jwtService, 'signAsync')
+        .mockResolvedValueOnce('new_refresh_token');
       jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
-      
+
       const result = await service.refreshTokens(authHeader);
-      
+
       expect(result).toEqual({
         accessToken: 'new_access_token',
         refreshToken: 'new_refresh_token',
@@ -226,7 +246,9 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException if user not found', async () => {
       jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue({ sub: 999 });
-      jest.spyOn(usersService, 'findOne').mockRejectedValue(new UnauthorizedException('User not found'));      
+      jest
+        .spyOn(usersService, 'findOne')
+        .mockRejectedValue(new UnauthorizedException('User not found'));
       await expect(service.refreshTokens('Bearer valid_token')).rejects.toThrow(
         UnauthorizedException,
       );
@@ -238,7 +260,7 @@ describe('AuthService', () => {
         ...mockUser,
         refreshToken: 'different_token',
       });
-      
+
       await expect(service.refreshTokens('Bearer valid_token')).rejects.toThrow(
         UnauthorizedException,
       );
@@ -256,11 +278,15 @@ describe('AuthService', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       (bcrypt.hash as jest.Mock).mockResolvedValue('new_hashed_password');
       jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
-      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_access_token');
-      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('new_refresh_token');
-      
+      jest
+        .spyOn(jwtService, 'signAsync')
+        .mockResolvedValueOnce('new_access_token');
+      jest
+        .spyOn(jwtService, 'signAsync')
+        .mockResolvedValueOnce('new_refresh_token');
+
       const result = await service.changePassword(1, changePasswordDto);
-      
+
       expect(result).toEqual({
         accessToken: 'new_access_token',
         refreshToken: 'new_refresh_token',
@@ -273,14 +299,16 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException for incorrect current password', async () => {
       jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-      
+
       await expect(
         service.changePassword(1, changePasswordDto),
       ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw NotFoundException if user not found', async () => {
-      jest.spyOn(usersService, 'findOne').mockRejectedValue(new UnauthorizedException)      
+      jest
+        .spyOn(usersService, 'findOne')
+        .mockRejectedValue(new UnauthorizedException());
       await expect(
         service.changePassword(999, changePasswordDto),
       ).rejects.toThrow(UnauthorizedException);
@@ -297,7 +325,7 @@ describe('AuthService', () => {
       jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       jest.spyOn(usersService, 'remove').mockResolvedValue(undefined);
-      
+
       await expect(
         service.deleteAccount(1, deleteAccountDto),
       ).resolves.not.toThrow();
@@ -307,34 +335,38 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException for incorrect password', async () => {
       jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-      
+
       await expect(service.deleteAccount(1, deleteAccountDto)).rejects.toThrow(
         UnauthorizedException,
       );
     });
 
     it('should throw NotFoundException if user not found', async () => {
-      jest.spyOn(usersService, 'findOne').mockRejectedValue(new NotFoundException)      
-      
-      await expect(service.deleteAccount(999, deleteAccountDto)).rejects.toThrow(
-        NotFoundException,
-      );
+      jest
+        .spyOn(usersService, 'findOne')
+        .mockRejectedValue(new NotFoundException());
+
+      await expect(
+        service.deleteAccount(999, deleteAccountDto),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('generateTokens', () => {
     it('should generate access and refresh tokens', async () => {
       jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('access_token');
-      jest.spyOn(jwtService, 'signAsync').mockResolvedValueOnce('refresh_token');
+      jest
+        .spyOn(jwtService, 'signAsync')
+        .mockResolvedValueOnce('refresh_token');
       jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'findOne').mockResolvedValue({
         ...mockUser,
         refreshToken: 'refresh_token',
       });
-      
+
       // Using private method via any type casting
       const result = await (service as any).generateTokens(mockUser);
-      
+
       expect(result).toEqual({
         accessToken: 'access_token',
         refreshToken: 'refresh_token',
@@ -353,7 +385,7 @@ describe('AuthService', () => {
         ...mockUser,
         refreshToken: 'new_token',
       });
-      
+
       // Using private method via any type casting
       await expect(
         (service as any).storeRefreshToken(1, 'new_token'),
@@ -364,8 +396,10 @@ describe('AuthService', () => {
     });
 
     it('should throw InternalServerErrorException if update fails', async () => {
-      jest.spyOn(usersService, 'findOne').mockRejectedValue(new NotFoundException)      
-      
+      jest
+        .spyOn(usersService, 'findOne')
+        .mockRejectedValue(new NotFoundException());
+
       // Using private method via any type casting
       await expect(
         (service as any).storeRefreshToken(1, 'new_token'),
@@ -378,7 +412,7 @@ describe('AuthService', () => {
         ...mockUser,
         refreshToken: null,
       });
-      
+
       // Using private method via any type casting
       await expect(
         (service as any).storeRefreshToken(1, 'new_token'),

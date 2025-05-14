@@ -18,7 +18,7 @@ describe('AppController (e2e)', () => {
   const newUser: CreateUserDto = {
     username: 'e2etestuser',
     password: 'e2etestpassword',
-    role: 'user',
+    roleIds: [1], // Role ID for basic user role
   };
   const loginUser: LoginUserDto = {
     username: newUser.username,
@@ -56,10 +56,10 @@ describe('AppController (e2e)', () => {
      * expected string.
      */
     it('should return "Welcome to User Management Project! head to /auth for authentication related actions, \
-     or if you are a authorized user you can check the Users CRUD functionalities at /users"', () => {
+     or if you are a authorized user you can check the Users CRUD functionalities at /users"', () => {
       return request(app.getHttpServer()).get('/').expect(200).expect(
         'Welcome to User Management Project! head to /auth for authentication related actions, \
-     or if you are a authorized user you can check the Users CRUD functionalities at /users',
+     or if you are a authorized user you can check the Users CRUD functionalities at /users',
       );
     });
   });
@@ -182,7 +182,9 @@ describe('AppController (e2e)', () => {
         .then((response) => {
           expect(response.body).toHaveProperty('id');
           expect(response.body).toHaveProperty('username', newUser.username);
-          expect(response.body).toHaveProperty('role', newUser.role);
+          expect(response.body).toHaveProperty('roles'); // Check for roles array
+          expect(response.body.roles.length).toBeGreaterThan(0); // Should have at least one role
+          expect(response.body.roles[0]).toHaveProperty('name'); // Role should have a name
           expect(response.body).not.toHaveProperty('password');
           expect(response.body).not.toHaveProperty('refreshToken');
         });
@@ -197,6 +199,49 @@ describe('AppController (e2e)', () => {
     it('should return Unauthorized without a valid access token', () => {
       return request(app.getHttpServer())
         .get('/auth/profile')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+  });
+
+  /**
+   * @describe Additional test suite for user CRUD operations (if accessible with user token).
+   * Note: These tests might fail if the user doesn't have appropriate permissions.
+   */
+  describe('/users (with authenticated user)', () => {
+    /**
+     * @test Should get the list of users if the token has appropriate permissions.
+     * This test attempts to access the /users endpoint with the user's access token.
+     * The test passes if we get a 200 OK (user has permissions) or 403 Forbidden
+     * (user doesn't have permissions), as both are valid responses depending on the
+     * role configuration.
+     */
+    it('should access /users endpoint with valid permissions', () => {
+      return request(app.getHttpServer())
+        .get('/users')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .then((response) => {
+          // Either 200 (with permission) or 403 (without permission) is acceptable
+          expect([HttpStatus.OK, HttpStatus.FORBIDDEN]).toContain(
+            response.status,
+          );
+
+          if (response.status === HttpStatus.OK) {
+            expect(response.body).toHaveProperty('data');
+            expect(response.body).toHaveProperty('total');
+            expect(response.body).toHaveProperty('page');
+            expect(response.body).toHaveProperty('limit');
+          }
+        });
+    });
+
+    /**
+     * @test Should return Unauthorized if attempting to access /users without a token.
+     * This test verifies that the /users endpoint is protected and requires
+     * authentication.
+     */
+    it('should return Unauthorized when accessing /users without a token', () => {
+      return request(app.getHttpServer())
+        .get('/users')
         .expect(HttpStatus.UNAUTHORIZED);
     });
   });
