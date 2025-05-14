@@ -126,10 +126,10 @@ export class AuthService {
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
+      } else {
+        this.logger.error(error);
+        throw new InternalServerErrorException('Failed to refresh tokens');
       }
-      this.logger.error(error);
-
-      throw new InternalServerErrorException('Failed to refresh tokens');
     }
   }
 
@@ -192,7 +192,7 @@ export class AuthService {
 
       const user = await this.userService.findOne(userId);
 
-      if (!user || !(await bcrypt.compare(password, user.password))) {
+      if (! await bcrypt.compare(password, user.password)) {
         throw new UnauthorizedException(
           'Invalid credentials for account deletion',
         );
@@ -202,10 +202,14 @@ export class AuthService {
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
-      }
-      this.logger.error(error);
+      
+      } else if (error instanceof NotFoundException) {
+        throw error;
 
-      throw new InternalServerErrorException('Account deletion failed');
+      } else {
+        this.logger.error(error);
+        throw new InternalServerErrorException('Account deletion failed');
+      }
     }
   }
 
