@@ -40,9 +40,7 @@ export class UsersService {
     const { username, password } = createUserDto;
 
     // Check if user already exists (case-insensitive)
-    const existingUser = await this.userRepository.findOne({
-      where: { username: username.toLowerCase() },
-    });
+    const existingUser = await this.findOneByUsername(username);
     if (existingUser) {
       throw new ConflictException('Username already exists');
     }
@@ -129,9 +127,7 @@ export class UsersService {
         updateUserDto.username &&
         updateUserDto.username.toLowerCase() !== user.username
       ) {
-        const existingUser = await this.userRepository.findOne({
-          where: { username: updateUserDto.username.toLowerCase() },
-        });
+        const existingUser = await this.findOneByUsername(updateUserDto.username);
         if (existingUser) {
           throw new ConflictException('Username already exists');
         }
