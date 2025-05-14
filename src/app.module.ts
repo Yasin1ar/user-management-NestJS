@@ -1,6 +1,4 @@
 import { Module, OnApplicationBootstrap } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -30,9 +28,8 @@ import { DatabaseSeeder } from './database/database.seeder';
     AuthModule,
     RolesModule,
   ],
-  controllers: [AppController],
+  controllers: [],
   providers: [
-    AppService,
     {
       provide: APP_GUARD,
       useClass: AuthGuard, // Applies to ALL routes by default
