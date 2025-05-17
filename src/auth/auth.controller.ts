@@ -37,7 +37,7 @@ import {
 
 @ApiTags('auth')
 @Controller('auth')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 export class AuthController {
   constructor(private readonly authService: AuthService) {
     this.logger = new Logger(AuthController.name);
@@ -114,6 +114,7 @@ export class AuthController {
   }
 
   @Get('profile')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -186,6 +187,7 @@ export class AuthController {
   }
 
   @Patch('change-password')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Change current user password' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -215,6 +217,7 @@ export class AuthController {
   }
 
   @Delete('delete-account')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Delete current user account' })
   @ApiResponse({
     status: HttpStatus.OK,
