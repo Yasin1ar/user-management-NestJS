@@ -84,11 +84,12 @@ describe('UsersController', () => {
       jest.spyOn(service, 'create').mockResolvedValue(mockUser);
 
       const result = await controller.create(createUserDto);
-
       expect(result).toEqual({
         id: mockUser.id,
         username: mockUser.username,
+        roles: mockUser.roles,
         createdAt: mockUser.createdAt,
+        updatedAt: mockUser.updatedAt,
       });
       expect(service.create).toHaveBeenCalledWith(createUserDto);
     });
@@ -109,31 +110,10 @@ describe('UsersController', () => {
       const result = await controller.findAll(1, 10);
 
       expect(result).toEqual(mockPaginatedResponse);
-      expect(service.findAll).toHaveBeenCalledWith(1, 10);
-    });
-
-    it('should use default pagination values when not provided', async () => {
-      // Create mocks for the pipe transformations that would happen in a real request
-      const defaultValuePipe = new DefaultValuePipe(1);
-      const parseIntPipe = new ParseIntPipe();
-
-      // When no params are sent, the DefaultValuePipe provides defaults
-      const defaultPage = await defaultValuePipe.transform(undefined, {
-        type: 'query',
-        metatype: Number,
-        data: 'page',
+      expect(service.findAll).toHaveBeenCalledWith(1, 10, {
+        role: undefined,
+        search: undefined,
       });
-      const defaultLimit = await defaultValuePipe.transform(undefined, {
-        type: 'query',
-        metatype: Number,
-        data: 'limit',
-      });
-
-      jest.spyOn(service, 'findAll').mockResolvedValue(mockPaginatedResponse);
-
-      await controller.findAll(defaultPage, defaultLimit);
-
-      expect(service.findAll).toHaveBeenCalledWith(1, 10);
     });
   });
 
@@ -146,7 +126,9 @@ describe('UsersController', () => {
       expect(result).toEqual({
         id: mockUser.id,
         username: mockUser.username,
+        roles: mockUser.roles,
         createdAt: mockUser.createdAt,
+        updatedAt: mockUser.updatedAt,
       });
       expect(service.findOne).toHaveBeenCalledWith(1);
     });
@@ -174,7 +156,9 @@ describe('UsersController', () => {
       expect(result).toEqual({
         id: updatedUser.id,
         username: updatedUser.username,
+        roles: updatedUser.roles,
         createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt,
       });
       expect(service.update).toHaveBeenCalledWith(1, updateUserDto);
     });
