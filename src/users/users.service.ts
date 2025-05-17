@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
+import { Role } from './role.entity';
 import {
   CreateUserDto,
   UserResponseDto,
@@ -21,6 +22,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
   ) {
     this.logger = new Logger(UsersService.name);
   }
@@ -37,10 +40,10 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const { username, password } = createUserDto;
+    const { username, password, roleIds } = createUserDto;
 
     // Check if user already exists (case-insensitive)
-    const existingUser = await this.findOneByUsername(username);
+    const existingUser = await this.findUserByUsernameOptional(username);
     if (existingUser) {
       throw new ConflictException('Username already exists');
     }
@@ -51,6 +54,12 @@ export class UsersService {
         username: username.toLowerCase(),
         password: hashedPassword,
       });
+
+      // Assign roles if roleIds are provided
+      if (roleIds && roleIds.length > 0) {
+        const roles = await this.roleRepository.findByIds(roleIds);
+        newUser.roles = roles;
+      }
 
       return await this.userRepository.save(newUser);
     } catch (error) {
@@ -105,14 +114,20 @@ export class UsersService {
     return user;
   }
 
+  // This method throws an exception when user is not found (use for retrieval)
   async findOneByUsername(username: string): Promise<User> {
-    const user = await this.userRepository.findOne({
-      where: { username: username.toLowerCase() },
-    });
+    const user = await this.findUserByUsernameOptional(username);
     if (!user) {
       throw new NotFoundException(`User with username ${username} not found`);
     }
     return user;
+  }
+
+  // This method doesn't throw an exception when user is not found (use for existence checks)
+  async findUserByUsernameOptional(username: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { username: username.toLowerCase() },
+    });
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
@@ -127,7 +142,7 @@ export class UsersService {
         updateUserDto.username &&
         updateUserDto.username.toLowerCase() !== user.username
       ) {
-        const existingUser = await this.findOneByUsername(
+        const existingUser = await this.findUserByUsernameOptional(
           updateUserDto.username,
         );
         if (existingUser) {

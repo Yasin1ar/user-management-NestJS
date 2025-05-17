@@ -5,6 +5,7 @@ import {
   MinLength,
   IsArray,
   IsOptional,
+  IsNumber,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -33,5 +34,6 @@ export class CreateUserDto {
   })
   @IsArray()
   @IsOptional()
+  @IsNumber({}, { each: true })
   roleIds?: number[];
 }
