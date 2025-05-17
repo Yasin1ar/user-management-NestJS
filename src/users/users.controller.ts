@@ -28,6 +28,7 @@ import { PaginatedUsersResponse } from '../dto';
 @ApiTags('users')
 @Controller('users')
 @ApiBearerAuth()
+@ApiBearerAuth('access-token')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

@@ -22,6 +22,8 @@ import {
 @ApiTags('roles')
 @Controller('roles')
 @ApiBearerAuth()
+@ApiBearerAuth('access-token')
+
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
