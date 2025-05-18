@@ -1,4 +1,3 @@
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
@@ -83,7 +82,7 @@ describe('UsersService', () => {
     service = module.get<UsersService>(UsersService);
     userRepository = module.get<Repository<User>>(getRepositoryToken(User));
     roleRepository = module.get<Repository<Role>>(getRepositoryToken(Role));
-    
+
     // Override the logger with our mock
     (service as any).logger = mockLogger;
   });
@@ -167,7 +166,7 @@ describe('UsersService', () => {
       await expect(service.create(createUserDto)).rejects.toThrow(
         InternalServerErrorException,
       );
-      
+
       // Verify the error was logged
       expect(mockLogger.error).toHaveBeenCalled();
     });
@@ -295,13 +294,14 @@ describe('UsersService', () => {
 
     it('should update user details', async () => {
       const updatedUser = { ...mockUser, username: 'updated' };
-      
+
       // First find the user by ID
-      jest.spyOn(userRepository, 'findOne')
+      jest
+        .spyOn(userRepository, 'findOne')
         .mockResolvedValueOnce(mockUser) // For the initial findOne(id)
-        .mockResolvedValueOnce(null)     // For the findUserByUsernameOptional check (username is free)
+        .mockResolvedValueOnce(null) // For the findUserByUsernameOptional check (username is free)
         .mockResolvedValueOnce(updatedUser); // For verification after save
-      
+
       jest.spyOn(userRepository, 'save').mockResolvedValue(updatedUser);
 
       const result = await service.update(1, { username: 'updated' });
@@ -313,12 +313,13 @@ describe('UsersService', () => {
     it('should check username availability when updating username', async () => {
       const currentUser = { ...mockUser, username: 'oldname' };
       const updatedUser = { ...mockUser, username: 'newname' };
-      
-      jest.spyOn(userRepository, 'findOne')
+
+      jest
+        .spyOn(userRepository, 'findOne')
         .mockResolvedValueOnce(currentUser) // For finding user by ID
-        .mockResolvedValueOnce(null)        // For username availability check
+        .mockResolvedValueOnce(null) // For username availability check
         .mockResolvedValueOnce(updatedUser); // For verification
-      
+
       jest.spyOn(userRepository, 'save').mockResolvedValue(updatedUser);
 
       await service.update(1, { username: 'newname' });
@@ -331,20 +332,22 @@ describe('UsersService', () => {
     });
 
     it('should throw ConflictException when updating to an existing username', async () => {
-      jest.spyOn(userRepository, 'findOne')
+      jest
+        .spyOn(userRepository, 'findOne')
         .mockResolvedValueOnce({ ...mockUser, username: 'oldname' }) // Current user
         .mockResolvedValueOnce(mockUser); // New username already exists
-      
+
       await expect(
         service.update(1, { username: 'existingname' }),
       ).rejects.toThrow(ConflictException);
     });
 
     it('should hash password when updating password', async () => {
-      jest.spyOn(userRepository, 'findOne')
+      jest
+        .spyOn(userRepository, 'findOne')
         .mockResolvedValueOnce(mockUser) // For findOne(id)
         .mockResolvedValueOnce({ ...mockUser, password: 'newhashed' }); // For verification
-      
+
       (bcrypt.hash as jest.Mock).mockResolvedValue('newhashed');
       jest.spyOn(userRepository, 'save').mockResolvedValue({
         ...mockUser,
@@ -358,11 +361,12 @@ describe('UsersService', () => {
 
     it('should update refresh token when provided', async () => {
       const updatedUser = { ...mockUser, refreshToken: 'newtoken' };
-      
-      jest.spyOn(userRepository, 'findOne')
+
+      jest
+        .spyOn(userRepository, 'findOne')
         .mockResolvedValueOnce(mockUser) // For findOne(id)
         .mockResolvedValueOnce(updatedUser); // For verification
-      
+
       jest.spyOn(userRepository, 'save').mockResolvedValue(updatedUser);
 
       await service.update(1, { refreshToken: 'newtoken' });
@@ -383,10 +387,11 @@ describe('UsersService', () => {
     });
 
     it('should throw an error if verification after update fails', async () => {
-      jest.spyOn(userRepository, 'findOne')
+      jest
+        .spyOn(userRepository, 'findOne')
         .mockResolvedValueOnce(mockUser) // First call to find user
         .mockResolvedValueOnce(null); // Second call for verification - fails
-      
+
       jest.spyOn(userRepository, 'save').mockResolvedValue(mockUser);
 
       await expect(service.update(1, updateDto)).rejects.toThrow(
@@ -419,7 +424,7 @@ describe('UsersService', () => {
       // Create a fresh user object specifically for this test to avoid state issues
       const userWithSensitiveInfo = {
         id: 1,
-        username: 'testuser',  // Make sure this matches the expected value
+        username: 'testuser', // Make sure this matches the expected value
         password: 'secret',
         refreshToken: 'token',
         createdAt: new Date(),

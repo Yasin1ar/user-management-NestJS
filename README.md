@@ -15,7 +15,7 @@ This project implements a robust user management system with secure authenticati
 - **API Documentation** with Swagger UI
 
 ## Tech Stack  
-
+- **Node.js**: v20
 - **Database**: PostgreSQL  
 - **ORM**: TypeORM (Database interaction)  
 - **Documentation**: Swagger/OpenAPI

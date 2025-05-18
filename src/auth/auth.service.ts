@@ -36,21 +36,52 @@ export class AuthService {
     return userResponse;
   }
 
+  /**
+   * Password Management Refactoring:
+   * Centralized password validation method
+   */
+  private async validatePassword(
+    plaintext: string,
+    hashed: string,
+  ): Promise<boolean> {
+    return bcrypt.compare(plaintext, hashed);
+  }
+
+  /**
+   * Password Management Refactoring:
+   * Centralized password hashing method
+   */
+  private async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, 10);
+  }
+
+  /**
+   * Error Handling Strategy Refactoring:
+   * Centralized error handling method
+   */
+  private handleServiceError(error: any, operation: string): never {
+    if (
+      error instanceof UnauthorizedException ||
+      error instanceof NotFoundException ||
+      error instanceof ConflictException ||
+      error instanceof BadRequestException
+    ) {
+      throw error;
+    } else {
+      this.logger.error(`${operation} failed:`, error);
+      throw new InternalServerErrorException(`${operation} failed`);
+    }
+  }
+
   async register(createUserDto: CreateUserDto): Promise<TokensResponseDto> {
     try {
       this.logger.log(`Registering new user: ${createUserDto.username}`);
+      // userService checks if the user already exists or not
+      // also userService hashes the password
       const user = await this.userService.create(createUserDto);
       return this.generateTokens(user);
     } catch (error) {
-      if (
-        error instanceof ConflictException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      this.logger.error(error);
-
-      throw new InternalServerErrorException('Registration failed');
+      this.handleServiceError(error, 'Registration');
     }
   }
 
@@ -59,22 +90,15 @@ export class AuthService {
       const { username, password } = loginDto;
       // Find user
       const user = await this.userService.findOneByUsername(username);
-      // Validate user and password
-      if (!user || !(await bcrypt.compare(password, user.password))) {
+      // Validate user and password using refactored method
+      if (!user || !(await this.validatePassword(password, user.password))) {
         throw new UnauthorizedException('Invalid credentials');
       }
 
       // Generate tokens
       return this.generateTokens(user);
     } catch (error) {
-      if (
-        error instanceof UnauthorizedException ||
-        error instanceof NotFoundException
-      ) {
-        throw error;
-      }
-      this.logger.error(error);
-      throw new InternalServerErrorException('Login failed');
+      this.handleServiceError(error, 'Login');
     }
   }
 
@@ -86,12 +110,7 @@ export class AuthService {
       }
       return this.toUserResponseDto(user);
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(error);
-
-      throw new InternalServerErrorException('Failed to fetch profile');
+      this.handleServiceError(error, 'Profile fetch');
     }
   }
 
@@ -124,12 +143,7 @@ export class AuthService {
 
       return tokens;
     } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      } else {
-        this.logger.error(error);
-        throw new InternalServerErrorException('Failed to refresh tokens');
-      }
+      this.handleServiceError(error, 'Token refresh');
     }
   }
 
@@ -146,9 +160,6 @@ export class AuthService {
       this.logger.error(
         `Failed to clear refresh token for user ${userId}: ${error.message}`,
       );
-      this.logger.error(error);
-
-      throw new InternalServerErrorException('Failed to clear refresh token');
     }
   }
 
@@ -158,14 +169,23 @@ export class AuthService {
   ): Promise<TokensResponseDto> {
     try {
       const { currentPassword, newPassword } = changePasswordDto;
-
+      if (currentPassword === newPassword) {
+        throw new ConflictException(
+          'Your new password must be different from the current one',
+        );
+      }
       const user = await this.userService.findOne(userId);
 
-      if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      // Using refactored password validation method
+      if (
+        !user ||
+        !(await this.validatePassword(currentPassword, user.password))
+      ) {
         throw new UnauthorizedException('Current password is incorrect');
       }
 
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+      // Using refactored password hashing method
+      const hashedNewPassword = await this.hashPassword(newPassword);
       await this.userService.update(userId, { password: hashedNewPassword });
 
       // Clear refresh token when password is changed
@@ -174,12 +194,7 @@ export class AuthService {
       const updatedUser = await this.userService.findOne(userId);
       return this.generateTokens(updatedUser);
     } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      this.logger.error(error);
-
-      throw new InternalServerErrorException('Password change failed');
+      this.handleServiceError(error, 'Password change');
     }
   }
 
@@ -189,10 +204,10 @@ export class AuthService {
   ): Promise<void> {
     try {
       const { password } = deleteAccountDto;
-
       const user = await this.userService.findOne(userId);
 
-      if (!(await bcrypt.compare(password, user.password))) {
+      // Using refactored password validation method
+      if (!(await this.validatePassword(password, user.password))) {
         throw new UnauthorizedException(
           'Invalid credentials for account deletion',
         );
@@ -200,14 +215,7 @@ export class AuthService {
 
       await this.userService.remove(userId);
     } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      } else if (error instanceof NotFoundException) {
-        throw error;
-      } else {
-        this.logger.error(error);
-        throw new InternalServerErrorException('Account deletion failed');
-      }
+      this.handleServiceError(error, 'Account deletion');
     }
   }
 
